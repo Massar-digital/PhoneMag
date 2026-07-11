@@ -1151,7 +1151,7 @@ function createWindow(licenseStatus) {
     
     if(isDev) {
       setTimeout(() => {
-        win.loadURL('http://localhost:8000');
+        win.loadURL('http://localhost:5173');
       }, 1000);
     } else {
       // Use startUrl since indexPath is scoped to the else block above
