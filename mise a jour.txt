@@ -1,0 +1,16 @@
+1. Modifier le numéro de version dans [frontend-vite/package.json](file:///home/bruce/Desktop/Projects/PhoneMAGv2/frontend-vite/package.json)
+
+# 2. Re-builder le backend Django
+cd backend
+python build_exe.py
+cd ..
+
+# 1. Nettoyer le dossier de destination (dans le frontend)
+Remove-Item -Recurse -Force "./frontend-vite/build_backend/*" -ErrorAction SilentlyContinue
+
+# 2. Copier depuis le dossier backend vers le dossier frontend
+Copy-Item -Path "./backend/dist/serve_backend/*" -Destination "./frontend-vite/build_backend/" -Recurse -Force
+
+# 3. Lancer le build final
+cd frontend-vite
+npm run electron:build

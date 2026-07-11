@@ -1,0 +1,50 @@
+name: Backend Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python - <<'PY'
+          from pathlib import Path
+
+          requirements_path = Path("backend/requirements.txt")
+          raw = requirements_path.read_bytes()
+
+          if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+              text = raw.decode("utf-16")
+              requirements_path.write_text(text, encoding="utf-8", newline="\n")
+          elif b"\x00" in raw:
+              try:
+                  text = raw.decode("utf-16")
+              except UnicodeDecodeError:
+                  text = raw.decode("utf-16-le")
+              requirements_path.write_text(text, encoding="utf-8", newline="\n")
+          PY
+          pip install -r backend/requirements.txt
+
+      - name: Run backend tests
+        working-directory: backend
+        env:
+          SECRET_KEY: dummy-test-secret-key
+          DEBUG: "False"
+        run: pytest -q
