@@ -150,6 +150,11 @@ const POS = () => {
     }, 100);
   };
 
+  // Load all in-stock products on mount
+  useEffect(() => {
+    loadAllProducts();
+  }, []);
+
   // Search-as-you-type debounced
   useEffect(() => {
     if (searchTerm.length >= 2) {
@@ -158,9 +163,21 @@ const POS = () => {
       }, 300);
       return () => clearTimeout(handler);
     } else if (searchTerm.length < 2) {
-      setPhones([]);
+      // When search is cleared or < 2 chars, show all products again
+      loadAllProducts();
     }
   }, [searchTerm]);
+
+  const loadAllProducts = async () => {
+    try {
+      const response = await phonesAPI.getAll({ in_stock: 'true' });
+      const phoneData = response.data.results || response.data;
+      setPhones(Array.isArray(phoneData) ? phoneData : []);
+    } catch (error) {
+      console.error('Failed to load products:', error);
+      setPhones([]);
+    }
+  };
 
   const searchProducts = async (query) => {
     try {
