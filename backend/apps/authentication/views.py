@@ -251,7 +251,13 @@ class CustomTokenRefreshView(TokenRefreshView):
         # If refresh token is missing in body, try to get it from cookie
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
         refresh_token = data.get('refresh') or request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
-        
+
+        if not refresh_token:
+            return Response(
+                {'detail': 'No active session found.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         if refresh_token:
             data['refresh'] = refresh_token
             

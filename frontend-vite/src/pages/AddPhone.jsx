@@ -11,7 +11,6 @@ import { phonesAPI, suppliersAPI } from '../services/api';
 import { useShopSettings } from '../hooks/useShop';
 import { useFormSubmission } from '../hooks/useFormSubmission';
 import { phoneSchema } from '../utils/validationSchemas';
-import { useAuth } from '../context/AuthContext';
 
 // interface PhoneFormData {
 //   brand;
@@ -28,17 +27,9 @@ import { useAuth } from '../context/AuthContext';
 
 const AddPhone = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { data: shopSettings } = useShopSettings();
   const [addAnother, setAddAnother] = useState(false);
   
-  // Check permission
-  useEffect(() => {
-    if (user && user.role !== 'admin' && user.role !== 'manager') {
-      navigate('/phones');
-    }
-  }, [user, navigate]);
-
   const [printAfterCreate, setPrintAfterCreate] = useState(true);
   const [lastCreatedPhone, setLastCreatedPhone] = useState(null);
   const [lastQuantity, setLastQuantity] = useState(1);

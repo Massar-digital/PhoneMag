@@ -11,7 +11,6 @@ import { PhoneCard } from '../components/phones/PhoneCard';
 import { PhoneTable } from '../components/phones/PhoneTable';
 import { BarcodeLabel } from '../components/BarcodeLabel';
 import { phonesAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import { useShopSettings } from '../hooks/useShop';
 import { MobileBottomNav } from '../components/layout/MobileBottomNav';
 import { 
@@ -32,7 +31,6 @@ import { Modal } from '../components/common/Modal';
 
 const PhonesList = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { data: shopSettings } = useShopSettings();
   const [phones, setPhones] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,8 +88,6 @@ const PhonesList = () => {
     setActivePrintProduct(null);
   };
   
-  // Check if user has permission to manage phones
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
   const [pagination, setPagination] = useState({
     // count: 0,
     // next: null string | null,
@@ -295,11 +291,9 @@ const PhonesList = () => {
                 </Button>
               </div>
             )}
-            {isAdminOrManager && (
-              <Button onClick={handleAddPhone} icon={<PlusIcon className="w-5 h-5" />} className="w-full sm:w-auto">
-                Ajouter un produit
-              </Button>
-            )}
+            <Button onClick={handleAddPhone} icon={<PlusIcon className="w-5 h-5" />} className="w-full sm:w-auto">
+              Ajouter un produit
+            </Button>
           </div>
         }
       />

@@ -66,8 +66,8 @@ export const setAuthTokens = (access, refresh) => {
   
   // With httpOnly cookies, we don't store tokens in localStorage anymore
   // But we might still want to know if we're "logged in" for UI purposes
-  if (authToken) localStorage.setItem('is_logged_in', 'true');
-  else localStorage.removeItem('is_logged_in');
+  if (authToken) localStorage.setItem('auth_v2_is_logged_in', 'true');
+  else localStorage.removeItem('auth_v2_is_logged_in');
   
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
@@ -172,7 +172,7 @@ api.interceptors.response.use(
 
       // Start refresh process
       // With cookies, we check the is_logged_in flag instead of refresh_token existence
-      const isLoggedIn = localStorage.getItem('is_logged_in') === 'true';
+      const isLoggedIn = localStorage.getItem('auth_v2_is_logged_in') === 'true';
       if (isLoggedIn) {
         isRefreshing = true;
         
@@ -205,7 +205,7 @@ api.interceptors.response.use(
           // Refresh failed, clear markers and redirect to login
           authToken = null;
           refreshTokenValue = null;
-          localStorage.removeItem('is_logged_in');
+          localStorage.removeItem('auth_v2_is_logged_in');
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user');
@@ -221,6 +221,7 @@ api.interceptors.response.use(
         // No refresh token available, clear everything and redirect
         authToken = null;
         refreshTokenValue = null;
+        localStorage.removeItem('auth_v2_is_logged_in');
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');

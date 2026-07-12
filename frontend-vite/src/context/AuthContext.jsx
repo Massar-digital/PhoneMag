@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     setAuthTokens(null, null);
-    localStorage.removeItem('is_logged_in');
+    localStorage.removeItem('auth_v2_is_logged_in');
     localStorage.removeItem('user');
     localStorage.removeItem('rememberMe');
     // We don't remove last_boot_time so the next check still works
@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       // Check for logic marker or stored user on app load
-      const isLoggedIn = localStorage.getItem('is_logged_in') === 'true';
+      const isLoggedIn = localStorage.getItem('auth_v2_is_logged_in') === 'true';
       const storedUser = localStorage.getItem('user');
 
       if (isLoggedIn && storedUser) {

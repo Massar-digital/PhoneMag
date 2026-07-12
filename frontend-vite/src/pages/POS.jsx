@@ -14,13 +14,14 @@ import {
 import { PageHeader } from '../components/layout/PageHeader';
 import { phonesAPI, salesAPI } from '../services/api';
 import { useShopSettings } from '../hooks/useShop';
-import { 
+import {
   DevicePhoneMobileIcon, 
   ShoppingCartIcon,
   TrashIcon,
   UserPlusIcon,
   TicketIcon,
-  ArrowRightIcon
+  ArrowRightIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 import { MobileBottomNav } from '../components/layout/MobileBottomNav';
 import PrintableInvoice from '../components/PrintableInvoice';
@@ -187,25 +188,32 @@ const POS = () => {
 
     setIsProcessing(true);
     try {
-      // 1. Try IMEI lookup
-      try {
-        const response = await phonesAPI.getByIMEI(cleanScannedCode);
-        if (response.data) {
-          addToCart(response.data);
-          window.showToast?.(`${response.data.brand} ${response.data.model} ajouté au panier`, 'success');
-          return;
-        }
-      } catch (e) { /* Not found by IMEI */ }
+      const looksLikeImei = /^\d{15}$/.test(cleanScannedCode);
+      const looksLikeBarcode = /^PM-\d{6}/i.test(cleanScannedCode);
 
-      // 2. Try Barcode lookup
-      try {
-        const response = await phonesAPI.getByBarcode(cleanScannedCode);
-        if (response.data) {
-          addToCart(response.data);
-          window.showToast?.(`${response.data.brand} ${response.data.model} ajouté au panier`, 'success');
-          return;
-        }
-      } catch (e) { /* Not found by barcode */ }
+      // 1. Try IMEI lookup (only when the scanned value is a 15-digit IMEI)
+      if (looksLikeImei) {
+        try {
+          const response = await phonesAPI.getByIMEI(cleanScannedCode);
+          if (response.data) {
+            addToCart(response.data);
+            window.showToast?.(`${response.data.brand} ${response.data.model} ajouté au panier`, 'success');
+            return;
+          }
+        } catch (e) { /* Not found by IMEI */ }
+      }
+
+      // 2. Try Barcode lookup (only when the scanned value matches the PM- barcode format)
+      if (looksLikeBarcode) {
+        try {
+          const response = await phonesAPI.getByBarcode(cleanScannedCode);
+          if (response.data) {
+            addToCart(response.data);
+            window.showToast?.(`${response.data.brand} ${response.data.model} ajouté au panier`, 'success');
+            return;
+          }
+        } catch (e) { /* Not found by barcode */ }
+      }
 
       // 3. Fallback to specialized ID barcode format: PM-000XXX-YYY
       if (cleanScannedCode.startsWith('PM-')) {
@@ -683,15 +691,26 @@ const POS = () => {
                     </button>
                   )}
                 </div>
-                <Button
-                  onClick={barcodeScanner.toggleScanner}
-                  variant={barcodeScanner.enabled ? "primary" : "secondary"}
-                  size="sm"
-                  className="flex items-center gap-1 text-xs px-2.5 py-1.5"
-                >
-                  <DevicePhoneMobileIcon className="w-3.5 h-3.5" />
-                  {barcodeScanner.enabled ? 'Scanner ON' : 'Scanner OFF'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => navigate('/phones/add')}
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center gap-1 text-xs px-2.5 py-1.5"
+                  >
+                    <PlusIcon className="w-3.5 h-3.5" />
+                    Ajouter un produit
+                  </Button>
+                  <Button
+                    onClick={barcodeScanner.toggleScanner}
+                    variant={barcodeScanner.enabled ? "primary" : "secondary"}
+                    size="sm"
+                    className="flex items-center gap-1 text-xs px-2.5 py-1.5"
+                  >
+                    <DevicePhoneMobileIcon className="w-3.5 h-3.5" />
+                    {barcodeScanner.enabled ? 'Scanner ON' : 'Scanner OFF'}
+                  </Button>
+                </div>
               </div>
 
               {/* Main Search Input */}
@@ -751,6 +770,17 @@ const POS = () => {
                     ? "Essayez d'ajuster votre recherche ou vérifiez l'état du stock."
                     : "Recherchez par marque, modèle, IMEI ou scannez un code-barres."}
                 </p>
+                {searchTerm.length >= 2 && (
+                  <Button
+                    onClick={() => navigate('/phones/add')}
+                    variant="primary"
+                    size="sm"
+                    className="flex items-center gap-1.5 mt-3"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    Ajouter un produit
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100 min-h-0 bg-slate-50/10">
