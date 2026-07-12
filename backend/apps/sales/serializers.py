@@ -426,13 +426,24 @@ class SaleSerializer(serializers.ModelSerializer):
         return value
     
     def validate_total_price(self, value):
-        """Validate total price"""
-        return validate_price(value)
+        """Validate total price (0 is allowed for fully-discounted / gift sales)"""
+        if value < 0:
+            raise serializers.ValidationError('Total price cannot be negative.')
+        return value
     
     def validate_customer_name(self, value):
-        """Validate customer name"""
+        """Validate customer name.
+
+        Allow common name characters (spaces, apostrophes, accents, '&', '#',
+        etc.). We intentionally do NOT run sanitize_string's aggressive
+        character stripping / HTML-escaping here: the value is rendered through
+        React (which auto-escapes output), so storing it raw is XSS-safe and
+        avoids corrupting legitimate names like "D'Jazair" or "Ali & Fils".
+        """
         if value:
-            return sanitize_string(value, max_length=100)
+            value = value.strip()
+            if len(value) > 100:
+                raise serializers.ValidationError('Customer name is too long.')
         return value
     
     def validate_discount_applied(self, value):
@@ -476,10 +487,10 @@ class SaleSerializer(serializers.ModelSerializer):
                 'items': 'Cannot have both phone and items. Use items for multiple products.'
             })
         
-        # Total price should be positive
-        if 'total_price' in data and data['total_price'] <= 0:
+        # Total price should be non-negative (0 allowed for fully-discounted sales)
+        if 'total_price' in data and data['total_price'] < 0:
             raise serializers.ValidationError({
-                'total_price': 'Total price must be greater than zero.'
+                'total_price': 'Total price cannot be negative.'
             })
         
         # For single-item sales (backward compatibility)
@@ -644,10 +655,13 @@ class CustomerSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'loyalty_points']
     
     def validate_name(self, value):
-        """Validate customer name"""
+        """Validate customer name (allow apostrophes, accents, '&', etc.)"""
         if not value or len(value.strip()) == 0:
             raise serializers.ValidationError('Customer name cannot be empty.')
-        return sanitize_string(value, max_length=100)
+        value = value.strip()
+        if len(value) > 100:
+            raise serializers.ValidationError('Customer name is too long.')
+        return value
     
     def validate_phone(self, value):
         """Validate customer phone number"""

@@ -42,11 +42,6 @@ const PAYMENT_BY_SHORTCUT_KEY = {
   '3': 'Split',
 };
 
-const isBarcodeScanField = (element) =>
-  element &&
-  (element.classList?.contains('barcode-input') ||
-    element.closest?.('.keyboard-barcode-scanner'));
-
 const POS = () => {
   const navigate = useNavigate();
   const { data: shopSettings } = useShopSettings();
@@ -578,9 +573,15 @@ const POS = () => {
         return;
       }
 
-      // 1-3 payment quick-select (scanner may stay ON; not while barcode field is focused)
+      // 1-3 payment quick-select — only when NOT typing inside an editable field
+      const isEditingField = active && (
+        active.tagName.toLowerCase() === 'input' ||
+        active.tagName.toLowerCase() === 'textarea' ||
+        active.tagName.toLowerCase() === 'select' ||
+        active.hasAttribute('contenteditable')
+      );
       const canUsePaymentShortcut =
-        POS_PAYMENT_SHORTCUT_KEYS.includes(e.key) && !isBarcodeScanField(active);
+        POS_PAYMENT_SHORTCUT_KEYS.includes(e.key) && !isEditingField;
 
       if (canUsePaymentShortcut && PAYMENT_BY_SHORTCUT_KEY[e.key]) {
         e.preventDefault();

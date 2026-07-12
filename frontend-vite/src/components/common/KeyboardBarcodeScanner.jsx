@@ -63,6 +63,20 @@ export const KeyboardBarcodeScanner = forwardRef(({
   const handleKeyDown = useCallback((event) => {
     if (!enabled) return;
 
+    // Only intercept keystrokes intended for the scanner. If another text
+    // field (e.g. customer name, search, discount) is focused, let it handle
+    // the input normally so we don't steal characters into the scan field.
+    const active = document.activeElement;
+    const isEditable = active && (
+      active.tagName === 'INPUT' ||
+      active.tagName === 'TEXTAREA' ||
+      active.tagName === 'SELECT' ||
+      active.isContentEditable
+    );
+    if (isEditable && active !== inputRef.current) {
+      return;
+    }
+
     // Ignore non-character keys (except Enter)
     if (event.key.length > 1 && event.key !== 'Enter') return;
 
