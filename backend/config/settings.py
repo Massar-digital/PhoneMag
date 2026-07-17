@@ -200,23 +200,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-        'apps.authentication.throttles.GeneralAPIThrottle',
-    ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/hour',
-        'login': '100/hour',
-        'register': '10/hour',
-        'password_reset': '5/hour',
-        'password_reset_confirm': '10/hour',
-        'password_change': '10/hour',
-        'token_refresh': '1000/hour',
-        'sensitive_action': '50/hour',
-        'api': '5000/hour',
-    },
+
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],

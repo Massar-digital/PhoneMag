@@ -8,7 +8,6 @@ from drf_spectacular.types import OpenApiTypes
 
 from .models import Shop
 from .serializers import ShopSerializer
-from apps.authentication.throttles import SensitiveActionThrottle
 
 @extend_schema_view(
     list=extend_schema(
@@ -104,7 +103,6 @@ class ShopViewSet(viewsets.ModelViewSet):
 
     serializer_class = ShopSerializer
     permission_classes = [IsAuthenticated]
-    throttle_classes = [SensitiveActionThrottle]
 
     def get_queryset(self):
         """Return shop instances (typically only one)"""

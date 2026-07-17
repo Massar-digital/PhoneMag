@@ -9,7 +9,6 @@ from drf_spectacular.types import OpenApiTypes
 from .models import InventoryItem, StockHistory, Supplier
 from .serializers import InventoryItemSerializer, StockHistorySerializer, SupplierSerializer
 from apps.authentication.permissions import IsManagerOrAdmin, IsAdminForDestructive
-from apps.authentication.throttles import SensitiveActionThrottle
 
 
 @extend_schema_view(
@@ -179,14 +178,15 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     queryset = InventoryItem.objects.select_related('phone').all()
     serializer_class = InventoryItemSerializer
     permission_classes = [IsAuthenticated]
-    throttle_classes = [SensitiveActionThrottle]
-    
+
     def get_queryset(self):
         """Allow filtering by low stock"""
         queryset = super().get_queryset()
         low_stock = self.request.query_params.get('low_stock')
         if low_stock and low_stock.lower() == 'true':
-            queryset = queryset.filter(stock_quantity__lte=F('reorder_level'))
+            queryset = queryset.filter(
+                stock_quantity__lte=F('reorder_level')
+            ).exclude(phone__product_type__in=['Phone', 'Laptop'])
         
         # Add advanced multi-word search
         search = self.request.query_params.get('search')
@@ -454,7 +454,6 @@ class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     permission_classes = [IsAuthenticated]
-    throttle_classes = [SensitiveActionThrottle]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'contact_person', 'email', 'phone']
     ordering_fields = ['name', 'created_at']

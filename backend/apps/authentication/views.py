@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.models import User
@@ -28,15 +28,6 @@ from .serializers import (
 )
 from .models import PasswordResetToken, UserRole, UserPreferences
 from .permissions import CanManageUsers
-from .throttles import (
-    LoginThrottle,
-    RegisterThrottle,
-    PasswordResetThrottle,
-    PasswordResetConfirmThrottle,
-    PasswordChangeThrottle,
-    TokenRefreshThrottle,
-    SensitiveActionThrottle,
-)
 
 
 @api_view(['GET'])
@@ -49,7 +40,6 @@ def setup_status(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([RegisterThrottle])
 def create_initial_admin(request):
     """Create the very first administrator account and initial shop."""
     if User.objects.count() > 0:
@@ -179,7 +169,6 @@ def create_initial_admin(request):
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom token view that uses our custom serializer and sets cookies"""
     serializer_class = CustomTokenObtainPairSerializer
-    throttle_classes = [LoginThrottle]
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
@@ -245,7 +234,6 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 )
 class CustomTokenRefreshView(TokenRefreshView):
     """Custom token refresh view with rate limiting and cookie support"""
-    throttle_classes = [TokenRefreshThrottle]
 
     def post(self, request, *args, **kwargs):
         # If refresh token is missing in body, try to get it from cookie
@@ -372,7 +360,6 @@ def upload_profile_picture(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-@throttle_classes([PasswordChangeThrottle])
 def change_password(request):
     """Change user password"""
     serializer = ChangePasswordSerializer(data=request.data)
@@ -576,7 +563,6 @@ class UserViewSet(viewsets.ModelViewSet):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([RegisterThrottle])
 def register(request):
     """Register a new user"""
     serializer = UserRegistrationSerializer(data=request.data)
@@ -619,7 +605,6 @@ def register(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([PasswordResetThrottle])
 def password_reset_request(request):
     """Request password reset using developer PIN override"""
     print(f"DEBUG: password_reset_request hit with data: {request.data}")
@@ -681,7 +666,6 @@ def password_reset_request(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([PasswordResetConfirmThrottle])
 def password_reset_confirm(request):
     """Confirm password reset with token and new password"""
     serializer = PasswordResetConfirmSerializer(data=request.data)

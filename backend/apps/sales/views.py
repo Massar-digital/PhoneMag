@@ -20,7 +20,6 @@ from .filters import SaleFilter
 from .filters_customer import CustomerFilter
 from datetime import datetime, timedelta
 from apps.authentication.permissions import IsSalespersonCanCreateSales, IsAdminForDestructive
-from apps.authentication.throttles import SensitiveActionThrottle
 
 
 @extend_schema_view(
@@ -279,8 +278,7 @@ class SaleViewSet(viewsets.ModelViewSet):
     filterset_class = SaleFilter
     ordering_fields = ['total_price', 'sale_date', 'customer_name', 'invoice_number']
     ordering = ['-sale_date']
-    throttle_classes = [SensitiveActionThrottle]
-    
+
     def get_permissions(self):
         """Override permissions based on action"""
         if self.action == 'destroy':
@@ -886,7 +884,6 @@ class ProductReturnViewSet(viewsets.ModelViewSet):
     queryset = ProductReturn.objects.prefetch_related('items__product').all()
     serializer_class = ProductReturnSerializer
     permission_classes = [IsAuthenticated]
-    throttle_classes = [SensitiveActionThrottle]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['sale', 'return_date']
     ordering_fields = ['return_date', 'return_number']

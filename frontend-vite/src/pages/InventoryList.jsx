@@ -251,7 +251,9 @@ const InventoryList = () => {
             <span className={`text-sm font-bold tabular-nums ${
               item.stock_quantity === 0 ? 'text-red-600' : item.is_low_stock ? 'text-amber-600' : 'text-emerald-600'
             }`}>
-              {item.stock_quantity}
+              {item.stock_quantity === 1 && ['Phone', 'Laptop'].includes(item.phone_details?.product_type)
+                ? 'Dernier'
+                : item.stock_quantity}
             </span>
             <span className="text-[10px] font-bold text-slate-400 uppercase">Unités</span>
           </div>

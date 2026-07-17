@@ -295,7 +295,11 @@ const PhoneDetails = () => {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-slate-600">Stock actuel :</span>
-                  <span className="font-medium">{phone.inventory.stock_quantity} unités</span>
+                  <span className="font-medium">
+                    {phone.inventory.stock_quantity === 1 && ['Phone', 'Laptop'].includes(phone.product_type)
+                      ? 'Dernier'
+                      : `${phone.inventory.stock_quantity} unités`}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Seuil de réapprovisionnement :</span>

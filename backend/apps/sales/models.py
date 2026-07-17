@@ -242,9 +242,9 @@ class Sale(models.Model):
                     created_by=self.user
                 )
 
-                # Specialized logic: If Used device and stock reached 0 after sale, delete product entry
+                # Delete phone/laptop from inventory when stock reaches 0 after sale
                 # Note: For SaleItem-based sales, deletion is handled in SaleItem.save()
-                if self.phone and self.phone.condition == 'Used' and inventory.stock_quantity <= 0:
+                if self.phone and self.phone.product_type in ('Phone', 'Laptop') and inventory.stock_quantity <= 0:
                     self.phone.delete()
 
     def delete(self, *args, **kwargs):
@@ -412,8 +412,8 @@ class SaleItem(models.Model):
                 previous_stock = inventory.stock_quantity
                 new_stock = previous_stock - self.quantity
                 
-                # Check if this is a used product that will reach 0 stock
-                if self.phone.condition == 'Used' and new_stock <= 0:
+                # Check if this is a phone/laptop that will reach 0 stock
+                if self.phone.product_type in ('Phone', 'Laptop') and new_stock <= 0:
                     should_delete_phone = True
                     # Ensure we have the snapshot before deleting
                     if not self.product_data_snapshot:
@@ -465,7 +465,7 @@ class SaleItem(models.Model):
                     created_by=self.sale.user
                 )
 
-                # Delete the product if it's a used device with 0 stock
+                # Delete the product if it's a phone/laptop with 0 stock
                 if should_delete_phone:
                     phone_to_delete.delete()
             elif is_new and self.phone:

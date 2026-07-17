@@ -251,7 +251,7 @@ export const PhoneCard = ({
                   <span className={`text-xs sm:text-sm font-black ${
                     stockQuantity === 0 ? 'text-red-600' : isLowStock ? 'text-amber-600' : 'text-emerald-600'
                   }`}>
-                    {stockQuantity}
+                    {stockQuantity === 1 && ['Phone', 'Laptop'].includes(phone.product_type) ? 'Dernier' : stockQuantity}
                   </span>
                   <div className="w-10 sm:w-12 h-0.5 sm:h-1 bg-slate-100 rounded-full overflow-hidden hidden xs:block">
                     <div 

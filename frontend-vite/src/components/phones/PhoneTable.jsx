@@ -208,7 +208,7 @@ export const PhoneTable = ({
                     <span className={`text-xs font-semibold ${
                       stockQuantity === 0 ? 'text-danger-600' : isLowStock ? 'text-warning-600' : 'text-slate-600'
                     }`}>
-                      {stockQuantity}
+                      {stockQuantity === 1 && ['Phone', 'Laptop'].includes(phone.product_type) ? 'Dernier' : stockQuantity}
                     </span>
                   </div>
                 </td>

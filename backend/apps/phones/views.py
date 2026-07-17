@@ -14,7 +14,6 @@ from .serializers import PhoneSerializer, PhoneDetailSerializer
 from .filters import PhoneFilter
 from apps.inventory.models import InventoryItem, StockHistory
 from apps.authentication.permissions import IsManagerOrAdmin, IsAdminForDestructive
-from apps.authentication.throttles import SensitiveActionThrottle
 
 
 @extend_schema(
@@ -278,7 +277,6 @@ class PhoneViewSet(viewsets.ModelViewSet):
     queryset = Phone.objects.select_related('inventory').all()
     serializer_class = PhoneSerializer
     permission_classes = [IsAuthenticated]
-    throttle_classes = [SensitiveActionThrottle]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = PhoneFilter
     ordering_fields = ['price', 'created_at']
