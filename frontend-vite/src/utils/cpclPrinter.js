@@ -33,6 +33,7 @@ export const mmToDots = (mm) => Math.round(mm * DOTS_PER_MM);
  * @param {string} options.productName - Product name (brand + model)
  * @param {string} options.specs - Product specifications (storage, RAM, color)
  * @param {string} options.barcodeData - Barcode value (e.g., "PM-000001")
+ * @param {string} options.imei - IMEI number (optional)
  * @param {string} options.price - Price with currency (e.g., "189000 DA")
  * @param {number} [options.labelWidthMM=35] - Label width in mm
  * @param {number} [options.labelHeightMM=40] - Label height in mm
@@ -44,6 +45,7 @@ export function generateCPCLLabel({
   productName,
   specs,
   barcodeData,
+  imei,
   price,
   labelWidthMM = DEFAULT_LABEL_WIDTH_MM,
   labelHeightMM = DEFAULT_LABEL_HEIGHT_MM,
@@ -54,27 +56,30 @@ export function generateCPCLLabel({
   const labelHeightDots = mmToDots(labelHeightMM);
   
   // Calculate positions (all in dots)
+  const hasImei = !!imei;
   // Label: 45mm x 35mm = 360 x 280 dots
   const layout = {
     // Shop name at top with small margin
     shopNameY: 12,
     // Product name below shop name
-    productNameY: 38,
+    productNameY: 36,
     // Specs below product name
-    specsY: 60,
+    specsY: 56,
+    // IMEI between specs and barcode
+    imeiY: 68,
     // Barcode positioned in middle area (wider label allows larger barcode)
     barcodeX: Math.round((labelWidthDots - 280) / 2), // Center the ~280-dot wide barcode
-    barcodeY: 80,
-    barcodeHeight: 45,
+    barcodeY: hasImei ? 86 : 78,
+    barcodeHeight: 42,
     // Human-readable barcode text below barcode
-    barcodeTextY: 132,
+    barcodeTextY: hasImei ? 134 : 126,
     // Price at bottom with inverted background
     priceBoxX: 60,
-    priceBoxY: 150,
+    priceBoxY: hasImei ? 150 : 142,
     priceBoxWidth: labelWidthDots - 120, // Leave margins on both sides
     priceBoxHeight: 32,
     priceTextX: 70,
-    priceTextY: 154,
+    priceTextY: hasImei ? 154 : 146,
   };
 
   // Truncate text if too long for label width
@@ -110,6 +115,9 @@ export function generateCPCLLabel({
     
     // Specifications (font 1 = 8-dot height, smallest)
     `TEXT 1 0 0 ${layout.specsY} ${truncatedSpecs}`,
+    
+    // IMEI (font 2 = bolder, only if available)
+    ...(hasImei ? [`TEXT 2 0 0 ${layout.imeiY} ${imei}`] : []),
     
     // Left alignment for barcode (needs precise X positioning)
     'LEFT',
@@ -200,6 +208,7 @@ export function generateCPCLBatch(products, options = {}) {
       productName,
       specs,
       barcodeData,
+      imei: phone.IMEI,
       price,
       labelWidthMM,
       labelHeightMM,

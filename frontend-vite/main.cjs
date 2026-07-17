@@ -781,15 +781,26 @@ ipcMain.on('print', (event, options = {}) => {
     
     if (isLabelPrint) {
       // PRO SOLUTION: Directly show the system print dialog for labels
+      // Note: On Wayland, BrowserWindow with show:false triggers zxdg_exporter_v2
+      // protocol violation and SIGTRAP. We create a visible window at (0,0)
+      // then immediately minimize it instead.
       let printWindow = new BrowserWindow({ 
-        show: false,
-        width: 800,
-        height: 600,
+        show: true,
+        width: 1,
+        height: 1,
+        x: -10000,
+        y: -10000,
+        frame: false,
+        transparent: true,
+        opacity: 0.0,
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true
         }
       });
+      
+      // Hide immediately after creation (works on Wayland since window was visible for a frame)
+      printWindow.hide();
       
       printWindow.loadURL(tempHtmlUrl);
       
@@ -817,15 +828,26 @@ ipcMain.on('print', (event, options = {}) => {
     }
     
     // Regular HTML printing (non-label)
+    // Note: On Wayland, BrowserWindow with show:false triggers a protocol
+    // violation (zxdg_exporter_v2) and SIGTRAP. Create window visible at
+    // an off-screen position then hide immediately.
     let printWindow = new BrowserWindow({ 
-      show: false, // SKIP THE BROWSER PAGE
-      width: 800,
-      height: 600,
+      show: true,
+      width: 1,
+      height: 1,
+      x: -10000,
+      y: -10000,
+      frame: false,
+      transparent: true,
+      opacity: 0.0,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true
       }
     });
+    
+    // Hide after creation (safe on Wayland since window was briefly visible)
+    printWindow.hide();
     
     // Load from temp file to ensure assets/fonts resolve in production builds
     printWindow.loadURL(tempHtmlUrl);

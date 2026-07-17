@@ -147,6 +147,12 @@ export const BarcodeLabel = React.forwardRef(({ phone, products = [], quantity =
                 </div>
               )}
 
+              {currentPhone.IMEI && (
+                <div style={{ fontSize: '8px', marginBottom: '0.6mm', whiteSpace: 'nowrap', overflow: 'hidden', fontWeight: '700', fontFamily: 'monospace' }}>
+                  {currentPhone.IMEI}
+                </div>
+              )}
+
               <div style={{ margin: '0.8mm 0', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <Barcode 
                   value={`PM-${currentPhone.id?.toString().padStart(6, '0')}`}

@@ -121,6 +121,7 @@ export function BarcodeLabelCPCL({
       productName,
       specs,
       barcodeData,
+      imei: phoneData.IMEI,
       price,
       labelWidthMM,
       labelHeightMM,
