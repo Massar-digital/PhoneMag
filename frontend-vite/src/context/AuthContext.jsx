@@ -90,15 +90,30 @@ export const AuthProvider = ({ children }) => {
           setUser(parsedUser);
           setToken('TRUE'); // Dummy value to indicate we are (theoretically) authenticated
 
-          // Sync with backend to get latest user data and verify cookie
+          // Validate session by silently refreshing the token first.
+          // This avoids triggering the interceptor's noisy 401 flow on getUser.
+          try {
+            const refreshResponse = await authAPI.refresh();
+            const newToken = refreshResponse.data.access;
+            if (newToken) {
+              setAuthTokens(newToken, null);
+              setToken(newToken);
+            }
+          } catch {
+            // Refresh token expired or invalid — session is gone, logout silently
+            logout();
+            setLoading(false);
+            return;
+          }
+
+          // Session is valid, sync with backend
           const response = await authAPI.getUser();
           if (response.data) {
             setUser(response.data);
             localStorage.setItem('user', JSON.stringify(response.data));
           }
         } catch (error) {
-          console.error('Failed to sync user data:', error);
-          // If sync fails completely (e.g. cookie expired), logout
+          // Silent fallback — should not reach here under normal conditions
           logout();
         }
       }

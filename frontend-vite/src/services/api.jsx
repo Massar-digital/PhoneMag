@@ -198,7 +198,7 @@ api.interceptors.response.use(
           console.log('Token refreshed successfully, retrying request');
           return api(originalRequest);
         } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
+          console.warn('Token refresh failed:', refreshError);
           onTokenRefreshed(refreshError, null);
           isRefreshing = false;
           
