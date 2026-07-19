@@ -41,6 +41,28 @@ contextBridge.exposeInMainWorld(
       getAppVersion: () => ipcRenderer.invoke('app:get-version'),
       getBootTime: () => ipcRenderer.invoke('os:get-boot-time'),
       relaunch: () => ipcRenderer.invoke('app:relaunch')
+    },
+    updates: {
+      onStatusChange: (callback) => {
+        const channels = [
+          'update_checking',
+          'update_available',
+          'update_not_available',
+          'update_download_progress',
+          'update_downloaded',
+          'update_error'
+        ];
+        channels.forEach(channel => {
+          ipcRenderer.on(channel, (_event, data) => callback(channel, data));
+        });
+        return () => {
+          channels.forEach(channel => {
+            ipcRenderer.removeAllListeners(channel);
+          });
+        };
+      },
+      checkForUpdates: () => ipcRenderer.send('check-for-updates'),
+      quitAndInstall: () => ipcRenderer.send('quit-and-install')
     }
   }
 );
