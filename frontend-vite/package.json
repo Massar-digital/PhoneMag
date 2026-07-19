@@ -23,10 +23,12 @@
     "productName": "PhoneMAG",
     "publish": [
       {
-        "provider": "generic",
-        "url": "https://api.keygen.sh/v1/accounts/5d66c27f-cc98-4aca-83eb-7a24c04fac84/artifacts/2267e999-6c95-4fb5-bbe3-cd38324a9948/releases/latest/update/${os}/${arch}"
+        "provider": "github",
+        "owner": "Massar-digital",
+        "repo": "PhoneMag",
+        "releaseType": "draft"
       }
-    ],
+],
     "files": [
       "dist/**/*",
       "main.cjs",

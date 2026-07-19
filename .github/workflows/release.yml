@@ -1,0 +1,100 @@
+# =============================================================================
+# PhoneMAG Release Pipeline
+# Trigger: git tag v* (e.g. v2.1.0)
+# Runner: windows-latest only
+# Builds: Django backend (PyInstaller) → copies EXE into Electron resources →
+#         builds Electron app (electron-builder) → publishes to GitHub Releases
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    name: Build & Release (Windows)
+    runs-on: windows-latest
+
+    steps:
+      # ---------------------------------------------------------------
+      # 1. Checkout the full repository (needed for git describe etc.)
+      # ---------------------------------------------------------------
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------
+      # 2. Set up Python 3.12 for the Django backend build
+      # ---------------------------------------------------------------
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      # ---------------------------------------------------------------
+      # 3. Install Python dependencies and build backend EXE
+      #    build_exe.py internally runs PyInstaller → produces
+      #    backend/dist/serve_backend/serve_backend.exe
+      # ---------------------------------------------------------------
+      - name: Build Django backend with PyInstaller
+        run: python backend/build_exe.py
+
+      # ---------------------------------------------------------------
+      # 4. Copy the built backend EXE into the Electron resources folder
+      #    electron-builder's extraResources picks this up as "backend"
+      # ---------------------------------------------------------------
+      - name: Copy backend EXE to frontend resources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path frontend-vite/build_backend
+          Copy-Item -Recurse -Force backend/dist/serve_backend/* frontend-vite/build_backend/
+
+      # ---------------------------------------------------------------
+      # 5. Set up Node.js 20 and cache npm dependencies
+      # ---------------------------------------------------------------
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend-vite/package-lock.json
+
+      # ---------------------------------------------------------------
+      # 6. Clean install dependencies (frozen lockfile — fails if out of
+      #    sync, ensuring reproducible builds)
+      # ---------------------------------------------------------------
+      - name: Install frontend dependencies
+        working-directory: frontend-vite
+        run: npm ci
+
+      # ---------------------------------------------------------------
+      # 7. Build the Electron app and publish to GitHub Releases
+      #    electron:build runs vite build then electron-builder.
+      #    --publish always uploads the draft release asset.
+      #    GH_TOKEN is auto-injected by GitHub Actions for public repos.
+      # ---------------------------------------------------------------
+      - name: Build & publish Electron app
+        working-directory: frontend-vite
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run electron:build -- --publish always
+
+      # ---------------------------------------------------------------
+      # 8. Upload the installer as a build artifact (backup / debugging)
+      #    Glob matches the NSIS installer produced by electron-builder.
+      # ---------------------------------------------------------------
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhoneMAG-Windows-Installer
+          path: frontend-vite/dist_electron/*.exe
+          if-no-files-found: warn
+          compression-level: 0
