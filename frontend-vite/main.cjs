@@ -43,35 +43,6 @@ function getMachineId() {
 }
 
 /**
- * Configure auto-updater to use Keygen
- */
-function configureUpdater(licenseKey = null) {
-  // We use the generic provider to point to Keygen's update artifact redirector
-  // Documentation: https://keygen.sh/docs/api/artifacts/#artifacts-update
-  const platform = process.platform === 'win32' ? 'windows' : 
-                   process.platform === 'darwin' ? 'macos' : 'linux';
-  
-  let url = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}/artifacts/${PRODUCT_ID}/releases/latest/update/${platform}`;
-  
-  // Adding the license key as a query parameter allows Keygen to verify 
-  // that the user has a valid license before allowing the download.
-  if (licenseKey) {
-    url += `?key=${licenseKey}`;
-  }
-
-  console.log(`Updater configured for: ${url.split('?')[0]}...`);
-  
-  try {
-    autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: url
-    });
-  } catch (e) {
-    console.error('Failed to set updater Feed URL:', e.message);
-  }
-}
-
-/**
  * Phase 1: Activation de la licence
  */
 async function activateLicense(licenseKey) {
@@ -143,8 +114,6 @@ async function activateLicense(licenseKey) {
 
     fs.writeFileSync(licenseFilePath, JSON.stringify(licenseData, null, 2));
     
-    // Configure updater with the new license key
-    configureUpdater(licenseKey);
     
     return { success: true };
 
@@ -246,7 +215,6 @@ async function validateLicense() {
 
     // 3. Licence locale valide → accepter immédiatement
     console.log("Validation: Licence locale valide. Démarrage rapide...");
-    configureUpdater(licenseData.key);
 
     // 4. Vérification en ligne en arrière-plan (non-bloquant)
     //    Ne se lance que si on est connecté. Résultat sauvegardé pour les prochains lancements.
@@ -1191,9 +1159,6 @@ function createWindow(licenseStatus) {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
-  // Initialize updater with default Keygen URL
-  configureUpdater();
-
   // Force light mode to ignore system dark mode settings
   nativeTheme.themeSource = 'light';
 
