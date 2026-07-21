@@ -239,7 +239,7 @@ const EditPhone = () => {
     if (!formData.color.trim()) newErrors.color = 'La couleur est requise';
     if (formData.purchase_price <= 0) newErrors.purchase_price = 'Le prix d\'achat doit être supérieur à 0';
     if (formData.price <= 0) newErrors.price = 'Le prix de vente doit être supérieur à 0';
-    if (formData.price < formData.purchase_price) newErrors.price = 'Le prix de vente doit être au moins égal au prix d\'achat';
+    if (Number(formData.price) < Number(formData.purchase_price)) newErrors.price = 'Le prix de vente doit être au moins égal au prix d\'achat';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
