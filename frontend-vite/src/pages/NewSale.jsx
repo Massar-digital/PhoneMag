@@ -70,6 +70,18 @@ const NewSaleModal = ({ isOpen, onClose, onSuccess }) => {
     }
   });
 
+  // Load all in-stock products
+  const loadAllProducts = async () => {
+    try {
+      const response = await phonesAPI.getAll({ in_stock: 'true' });
+      const phoneData = response.data.results || response.data;
+      setPhones(Array.isArray(phoneData) ? phoneData : []);
+    } catch (error) {
+      console.error('Error loading products:', error);
+      setPhones([]);
+    }
+  };
+
   // Search products with debouncing
   useEffect(() => {
     if (productSearch.length >= 2) {
@@ -78,8 +90,7 @@ const NewSaleModal = ({ isOpen, onClose, onSuccess }) => {
       }, 300);
       return () => clearTimeout(handler);
     } else if (productSearch.length < 2) {
-      // Avoid loading all records on mount, and clear if search is too short
-      setPhones([]);
+      loadAllProducts();
     }
   }, [productSearch]);
 
@@ -107,6 +118,7 @@ const NewSaleModal = ({ isOpen, onClose, onSuccess }) => {
   useEffect(() => {
     if (isOpen) {
       loadCustomers();
+      loadAllProducts();
       setCustomerMode('none');
       setShowSuccessDialog(false);
       setCreatedSale(null);

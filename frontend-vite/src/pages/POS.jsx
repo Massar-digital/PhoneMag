@@ -2,10 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
 import { Button } from '../components/common/Button';
-import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
-import { BarcodeScanner } from '../components/common/BarcodeScanner';
 import {
   KeyboardBarcodeScanner,
   useKeyboardBarcodeScanner,
@@ -94,11 +92,19 @@ const POS = () => {
     contentRef: invoiceRef,
     documentTitle: createdSale ? `Facture_${createdSale.invoice_number}` : 'Facture',
     print: async (printIframe) => {
-      if (window.electron && window.electron.print) {
-        const html = printIframe.contentDocument.documentElement.outerHTML;
-        window.electron.print({ html, preview: true });
-      } else {
-        printIframe.contentWindow.print();
+      try {
+        if (window.electron && window.electron.print) {
+          const doc = printIframe.contentDocument || printIframe.contentWindow?.document;
+          if (!doc) throw new Error('Print iframe document not available');
+          const html = doc.documentElement?.outerHTML || doc.body?.innerHTML || '';
+          if (!html) throw new Error('Print content is empty');
+          await window.electron.print({ html, preview: true });
+        } else {
+          printIframe.contentWindow.print();
+        }
+      } catch (error) {
+        console.error('Print error:', error);
+        window.showToast?.('Erreur lors de l\'impression', 'error');
       }
     }
   });
@@ -107,11 +113,19 @@ const POS = () => {
     contentRef: warrantyRef,
     documentTitle: createdSale ? `Garantie_${createdSale.invoice_number}` : 'Garantie',
     print: async (printIframe) => {
-      if (window.electron && window.electron.print) {
-        const html = printIframe.contentDocument.documentElement.outerHTML;
-        window.electron.print({ html, preview: true });
-      } else {
-        printIframe.contentWindow.print();
+      try {
+        if (window.electron && window.electron.print) {
+          const doc = printIframe.contentDocument || printIframe.contentWindow?.document;
+          if (!doc) throw new Error('Print iframe document not available');
+          const html = doc.documentElement?.outerHTML || doc.body?.innerHTML || '';
+          if (!html) throw new Error('Print content is empty');
+          await window.electron.print({ html, preview: true });
+        } else {
+          printIframe.contentWindow.print();
+        }
+      } catch (error) {
+        console.error('Print error:', error);
+        window.showToast?.('Erreur lors de l\'impression', 'error');
       }
     }
   });
@@ -137,12 +151,14 @@ const POS = () => {
     triggerPrintWarranty();
   };
 
-  const handlePrintReceipt = (sale) => {
+  const handlePrintReceipt = async (sale) => {
     if (!sale) return;
-    setCreatedSale(sale);
-    setTimeout(() => {
-      handlePrint();
-    }, 100);
+    try {
+      await handlePrint();
+    } catch (error) {
+      console.error('Print failed:', error);
+      window.showToast?.('Échec de l\'impression', 'error');
+    }
   };
 
   // Load all in-stock products on mount
@@ -285,7 +301,7 @@ const POS = () => {
           : item
       ));
     } else {
-      setCart([...cart, { phone, quantity: 1, price: Number(phone.price) || 0 }]);
+      setCart([...cart, { phone, quantity: 1, price: Number(phone.price) || 0, discount: 0 }]);
     }
     setActiveTab('cart');
     if (barcodeScanner.enabled) {
@@ -339,6 +355,12 @@ const POS = () => {
       }),
     [cart, discount, tradeIn, paymentMethod, customer]
   );
+
+  const isCashSufficient = useMemo(() => {
+    if (paymentMethod !== 'Cash') return true;
+    const received = parseFloat(cashReceived) || 0;
+    return received >= getTotal();
+  }, [paymentMethod, cashReceived, cart, discount, tradeIn]);
 
   const persistParkedSales = (updated) => {
     setParkedSales(updated);
@@ -421,7 +443,7 @@ const POS = () => {
         customer_name: customer.name.trim() || null,
         customer_phone: customer.phone || null,
         payment_method: paymentMethod,
-        discount_applied: "0.00", // Envoie 0 en global car on applique la remise sur les articles
+        discount_applied: parseFloat(discount || 0).toFixed(2),
         total_price: getTotal().toFixed(2),
         trade_in_value: tradeIn.enabled ? parseFloat(tradeIn.trade_in_value || 0).toFixed(2) : "0.00",
         warranty_duration: warrantyDuration,
@@ -471,6 +493,10 @@ const POS = () => {
 
   const startCheckout = () => {
     if (cart.length === 0) return;
+    if (!isCashSufficient) {
+      window.showToast?.('Le montant reçu doit être supérieur ou égal au total.', 'warning');
+      return;
+    }
     if (isExpressSale) {
       handleCompleteSale();
     } else {
@@ -498,8 +524,8 @@ const POS = () => {
     setPaymentMethod('Cash');
     setCashReceived('');
     setSearchTerm('');
-    setPhones([]);
     setFocusedIndex(-1);
+    loadAllProducts();
     setTimeout(() => {
       if (!barcodeScanner.enabled) {
         searchRef.current?.focus();
@@ -1041,6 +1067,23 @@ const POS = () => {
                       </button>
                     </div>
                   ))}
+                  {!saleComplete && !confirmPending && (
+                    <div className="p-2">
+                      <ReceiptPreview
+                        cart={cart}
+                        customer={customer}
+                        discount={discount}
+                        tradeIn={tradeIn}
+                        paymentMethod={paymentMethod}
+                        cashReceived={cashReceived}
+                        warrantyDuration={warrantyDuration}
+                        shopSettings={shopSettings}
+                        getSubtotal={getSubtotal}
+                        getTotal={getTotal}
+                        changeDue={changeDue}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1051,27 +1094,13 @@ const POS = () => {
                     <span>Sous-total:</span>
                     <span className="text-slate-900 font-extrabold">{getSubtotal().toLocaleString()} {shopSettings?.currency_symbol || 'DA'}</span>
                   </div>
+                  {parseFloat(discount || 0) > 0 && (
+                    <div className="flex justify-between text-xs text-red-600 font-bold">
+                      <span>Remise:</span>
+                      <span className="font-extrabold">-{parseFloat(discount).toLocaleString()} {shopSettings?.currency_symbol || 'DA'}</span>
+                    </div>
+                  )}
                   
-                  {/* Global Discount input inline */}
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs font-bold text-slate-600">Remise globale</span>
-                      <span className="text-[10px] font-bold text-slate-400">[F4]</span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        ref={discountRef}
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={discount || ''}
-                        onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                        className="w-28 text-center font-extrabold text-sm border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white"
-                      />
-                      <span className="absolute right-2 top-1.5 text-[9px] font-black text-slate-400">DA</span>
-                    </div>
-                  </div>
-
                   {/* Trade-in deduction line */}
                   {tradeIn.enabled && parseFloat(tradeIn.trade_in_value || 0) > 0 && (
                     <div className="flex justify-between text-xs text-orange-600 font-bold">
@@ -1359,22 +1388,41 @@ const POS = () => {
 
                   {/* Cash Received calculation widget */}
                   {paymentMethod === 'Cash' && (
-                    <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100 animate-in slide-in-from-top-1 duration-150">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-black text-slate-500 uppercase">Espèces reçues (DA)</label>
-                        <input
-                          type="number"
-                          placeholder="0.00"
-                          value={cashReceived}
-                          onChange={(e) => setCashReceived(e.target.value)}
-                          className="w-full px-3 py-1 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-900 focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                        />
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100 animate-in slide-in-from-top-1 duration-150">
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-black text-slate-500 uppercase">Espèces reçues (DA)</label>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            value={cashReceived}
+                            onChange={(e) => setCashReceived(e.target.value)}
+                            className="w-full px-3 py-1 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-900 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex flex-col justify-center pl-2">
+                          <span className="text-[9px] font-black text-slate-500 uppercase">Monnaie à rendre</span>
+                          <span className="text-base font-black text-success-600 truncate">
+                            {changeDue.toLocaleString()} {shopSettings?.currency_symbol || 'DA'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col justify-center pl-2">
-                        <span className="text-[9px] font-black text-slate-500 uppercase">Monnaie à rendre</span>
-                        <span className="text-base font-black text-success-600 truncate">
-                          {changeDue.toLocaleString()} {shopSettings?.currency_symbol || 'DA'}
-                        </span>
+                      {!isCashSufficient && (
+                        <p className="text-[10px] font-bold text-red-500 text-center">
+                          Le montant reçu doit être supérieur ou égal au total ({getTotal().toLocaleString()} {shopSettings?.currency_symbol || 'DA'})
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-100">
+                        <label className="text-[9px] font-black text-slate-500 uppercase">Remise (DA)</label>
+                        <input
+                          ref={discountRef}
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={discount || ''}
+                          onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                          className="w-24 text-center font-extrabold text-sm border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white [&::-webkit-inner-spin-button]:appearance-none"
+                        />
                       </div>
                     </div>
                   )}
@@ -1394,7 +1442,7 @@ const POS = () => {
                     <div className="col-span-2">
                       <button
                         onClick={startCheckout}
-                        disabled={cart.length === 0 || isProcessing}
+                        disabled={cart.length === 0 || isProcessing || !isCashSufficient}
                         className={`w-full py-2 disabled:bg-slate-200 disabled:text-slate-400 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-1 ${
                           isExpressSale
                             ? 'bg-success-600 hover:bg-success-700 shadow-success-600/20'
@@ -1423,24 +1471,6 @@ const POS = () => {
               )}
             </div>
 
-            {/* Real-time Receipt Preview */}
-            {cart.length > 0 && !saleComplete && !confirmPending && (
-              <div className="shrink-0">
-                <ReceiptPreview
-                  cart={cart}
-                  customer={customer}
-                  discount={discount}
-                  tradeIn={tradeIn}
-                  paymentMethod={paymentMethod}
-                  cashReceived={cashReceived}
-                  warrantyDuration={warrantyDuration}
-                  shopSettings={shopSettings}
-                  getSubtotal={getSubtotal}
-                  getTotal={getTotal}
-                  changeDue={changeDue}
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>
