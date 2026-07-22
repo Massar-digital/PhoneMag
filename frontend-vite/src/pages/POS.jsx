@@ -448,7 +448,9 @@ const POS = () => {
     setIsProcessing(true);
     try {
       const name = customer.name ? customer.name.trim().substring(0, 100) : null;
-      const phone = customer.phone ? customer.phone.trim() : null;
+      const rawPhone = customer.phone ? customer.phone.trim() : '';
+      const sanitizedPhone = rawPhone.replace(/[^\d+]/g, '');
+      const phone = sanitizedPhone.length >= 3 ? sanitizedPhone : null;
 
       const saleData = {
         customer_name: name,
@@ -485,6 +487,7 @@ const POS = () => {
         };
       }
       
+      console.log('Sale payload:', JSON.stringify(saleData, null, 2));
       const response = await salesAPI.create(saleData);
 
       console.log('Sale completed successfully!');
@@ -494,6 +497,7 @@ const POS = () => {
       window.showToast?.('Vente terminée avec succès !', 'success');
     } catch (error) {
       console.error('Failed to complete sale', error);
+      console.error('Error response data:', JSON.stringify(error.response?.data, null, 2));
       const errorMessage = formatDRFError(error.response?.data) || 
                           'Échec de la vente. Veuillez vérifier le stock et les détails.';
       window.showToast?.(errorMessage, 'error');
@@ -1155,7 +1159,7 @@ const POS = () => {
                 <div className="space-y-1">
                   <label className="block text-[10px] font-black text-slate-500 uppercase">Téléphone</label>
                   <input
-                    type="text"
+                    type="tel"
                     placeholder="0555..."
                     value={customer.phone}
                     onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
