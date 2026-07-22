@@ -9,8 +9,8 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { salesAPI } from '../services/api';
 import { useShopSettings } from '../hooks/useShop';
 import PrintableInvoice from '../components/PrintableInvoice';
-import PrintableWarranty from '../components/PrintableWarranty';
 import ReturnSaleModal from './ReturnSaleModal';
+import { useWarrantyPDF } from '../hooks/useWarrantyPDF';
 import { useToast } from '../context/ToastContext';
 
 
@@ -70,7 +70,7 @@ const SaleDetails = () => {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refunding, setRefunding] = useState(false);
   const invoiceRef = useRef(null);
-  const warrantyRef = useRef(null);
+  const { generateWarranty } = useWarrantyPDF();
 
   const handlePrintInvoice = useReactToPrint({
     contentRef: invoiceRef,
@@ -88,38 +88,22 @@ const SaleDetails = () => {
   });
 
   const handlePrintWarranty = async () => {
-    // Check for custom warranty PDF first if in Electron
-    if (window.electron?.warranty) {
-      try {
-        const hasCustom = await window.electron.warranty.checkCustom();
-        if (hasCustom) {
-          window.focus();
-          await window.electron.print({ filePath: 'custom_warranty.pdf', preview: true });
-          window.focus();
-          return;
-        }
-      } catch (error) {
-        console.error("Custom warranty check failed:", error);
-      }
-    }
-    // Fallback to default React component printing
-    triggerPrintWarranty();
-  };
-
-  const triggerPrintWarranty = useReactToPrint({
-    contentRef: warrantyRef,
-    documentTitle: sale ? `Garantie_${sale.invoice_number}` : 'Garantie',
-    print: async (printIframe) => {
+    try {
+      const doc = await generateWarranty(sale, shopSettings);
       if (window.electron && window.electron.print) {
+        const pdfBlob = doc.output('blob');
+        const blobUrl = URL.createObjectURL(pdfBlob);
         window.focus();
-        const html = printIframe.contentDocument.documentElement.outerHTML;
-        await window.electron.print({ html, preview: true });
+        await window.electron.print({ html: `<iframe src="${blobUrl}" width="100%" height="100%"></iframe>`, preview: true });
         window.focus();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
       } else {
-        printIframe.contentWindow.print();
+        doc.save(`Garantie_${sale.invoice_number || 'sans_facture'}.pdf`);
       }
+    } catch (error) {
+      console.error('Warranty PDF generation failed:', error);
     }
-  });
+  };
 
   const loadSale = useCallback(async (saleId) => {
     try {
@@ -423,11 +407,6 @@ const SaleDetails = () => {
           ref={invoiceRef} 
           sale={sale} 
           shopSettings={shopSettings?.data || shopSettings} 
-        />
-        <PrintableWarranty
-          ref={warrantyRef}
-          sale={sale}
-          shopSettings={shopSettings?.data || shopSettings}
         />
       </div>
     </div>
