@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { UpdateNotifier } from './components/common/UpdateNotifier';
 import { AppLayout } from './components/layout/AppLayout';
 import TitleBar from './components/layout/TitleBar';
 import { PageTransition } from './components/common/PageTransition';
@@ -164,6 +165,7 @@ const AppContent = () => {
   }
 
   return (
+    <>
     <Router>
       <div className="h-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden">
         <TitleBar />
@@ -452,6 +454,8 @@ const AppContent = () => {
     </div>
   </div>
 </Router>
+<UpdateNotifier />
+</>
   );
 };
 

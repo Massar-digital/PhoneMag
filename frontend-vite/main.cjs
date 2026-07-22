@@ -1222,6 +1222,11 @@ app.whenReady().then(async () => {
   const licenseStatus = await validateLicense();
 
   createWindow(licenseStatus);
+
+  // Check for updates after window is ready (not in dev mode)
+  if (!isDev) {
+    setTimeout(checkUpdates, 5000); // 5s delay to let the app fully initialize
+  }
 });
 
 app.on('before-quit', () => {
