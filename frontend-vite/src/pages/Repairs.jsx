@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
@@ -39,6 +39,13 @@ const Repairs = () => {
     estimated_cost: '',
     due_date: '',
   });
+  const descriptionTouched = useRef(false);
+
+  useEffect(() => {
+    if (editingRepair || descriptionTouched.current) return;
+    const parts = [newRepair.device_model, newRepair.estimated_cost ? `${newRepair.estimated_cost} DA` : ''].filter(Boolean);
+    setNewRepair(prev => ({ ...prev, issue_description: parts.join(' - ') }));
+  }, [newRepair.device_model, newRepair.estimated_cost]);
 
   const loadRepairs = useCallback(async () => {
     try {
@@ -74,6 +81,7 @@ const Repairs = () => {
         estimated_cost: '',
         due_date: '',
       });
+      descriptionTouched.current = false;
     }
     setIsModalOpen(true);
   };
@@ -246,10 +254,13 @@ const Repairs = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700">Description du problème</label>
               <textarea
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="mt-1 block w-full border-2 border-gray-300 rounded-xl shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 rows="3"
                 value={newRepair.issue_description}
-                onChange={(e) => setNewRepair({ ...newRepair, issue_description: e.target.value })}
+                onChange={(e) => {
+                  descriptionTouched.current = true;
+                  setNewRepair({ ...newRepair, issue_description: e.target.value });
+                }}
                 required
                 placeholder="Que faut-il réparer ?"
               />
