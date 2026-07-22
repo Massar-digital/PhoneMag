@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-release:
+  build-and-release-windows:
     name: Build & Release (Windows)
     runs-on: windows-latest
 
@@ -167,16 +167,74 @@ jobs:
           if-no-files-found: warn
           compression-level: 0
 
-      # -------------------------------------------------------------------
-      # macOS / Linux jobs go here later (add without touching Windows job)
-      #
-      # To add macOS:
-      #   - name: Build & Release (macOS)
-      #     runs-on: macos-latest
-      #     steps: [same structure, change --win to --mac]
-      #
-      # To add Linux:
-      #   - name: Build & Release (Linux)
-      #     runs-on: ubuntu-latest
-      #     steps: [same structure, change --win to --linux]
-      # -------------------------------------------------------------------
+  # -------------------------------------------------------------------
+  # Linux: .deb + .AppImage
+  # -------------------------------------------------------------------
+  build-and-release-linux:
+    name: Build & Release (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2  # required for AppImage
+
+      - name: Validate version tag matches package.json
+        run: |
+          TAG="${{ github.ref_name }}"
+          PKG_VERSION=$(node -p "require('./frontend-vite/package.json').version")
+          if [ "$TAG" != "v$PKG_VERSION" ]; then
+            echo "Tag '$TAG' does not match package.json version 'v$PKG_VERSION'"
+            exit 1
+          fi
+          echo "Tag '$TAG' matches package.json version 'v$PKG_VERSION'"
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Build Django backend with PyInstaller
+        run: python backend/build_exe.py
+
+      - name: Copy backend bundle to Electron resources
+        run: |
+          mkdir -p frontend-vite/build_backend
+          cp -r backend/dist/serve_backend/* frontend-vite/build_backend/
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend-vite/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend-vite
+        run: npm ci
+
+      - name: Build & publish Electron app
+        working-directory: frontend-vite
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run electron:build -- --linux --publish always
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PhoneMAG-Linux-${{ github.ref_name }}
+          path: |
+            frontend-vite/dist_electron/*.deb
+            frontend-vite/dist_electron/*.AppImage
+            frontend-vite/dist_electron/*.blockmap
+            frontend-vite/dist_electron/latest-linux.yml
+          if-no-files-found: warn
+          compression-level: 0
