@@ -303,8 +303,8 @@ const NewSaleModal = ({ isOpen, onClose, onSuccess }) => {
       }
 
       if (customerMode === 'new') {
-        saleData.customer_name = formData.customer_name;
-        saleData.customer_phone = formData.customer_phone;
+        saleData.customer_name = formData.customer_name || null;
+        saleData.customer_phone = formData.customer_phone || null;
       }
 
       const response = await salesAPI.create(saleData);

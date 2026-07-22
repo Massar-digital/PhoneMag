@@ -447,9 +447,12 @@ const POS = () => {
 
     setIsProcessing(true);
     try {
+      const name = customer.name ? customer.name.trim().substring(0, 100) : null;
+      const phone = customer.phone ? customer.phone.trim() : null;
+
       const saleData = {
-        customer_name: customer.name.trim() || null,
-        customer_phone: customer.phone || null,
+        customer_name: name,
+        customer_phone: phone,
         payment_method: paymentMethod,
         discount_applied: parseFloat(discount || 0).toFixed(2),
         total_price: getTotal().toFixed(2),

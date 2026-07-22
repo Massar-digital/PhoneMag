@@ -456,9 +456,9 @@ class SaleSerializer(serializers.ModelSerializer):
     
     def validate_customer_phone(self, value):
         """Validate customer phone number"""
-        if value:
-            return validate_phone_number(value)
-        return value
+        if value and str(value).strip():
+            return validate_phone_number(str(value).strip())
+        return None
     
     def validate_payment_method(self, value):
         """Validate payment method choice"""
