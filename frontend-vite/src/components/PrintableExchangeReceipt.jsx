@@ -26,6 +26,12 @@ const PrintableExchangeReceipt = React.forwardRef(({ exchange, shopSettings }, r
 
   const newPhonePrice = parseFloat(exchange.new_phone_price || 0);
   const tradeInValue = parseFloat(exchange.trade_in_value || 0);
+  const resalePrice = parseFloat(
+    exchange.resale_price ||
+    exchange.received_phone_details?.price ||
+    (tradeInValue > 0 ? tradeInValue * 1.2 : 0) ||
+    0
+  );
   const amountPaid = parseFloat(exchange.amount_paid_by_client || 0);
 
   const paymentLabels = {
@@ -173,6 +179,11 @@ const PrintableExchangeReceipt = React.forwardRef(({ exchange, shopSettings }, r
           <div style={{ borderTop: '1px dashed black', marginTop: '5px', paddingTop: '5px', fontWeight: 'bold', textAlign: 'right' }}>
             Valeur de reprise : {fmt(tradeInValue)}
           </div>
+          {resalePrice > 0 && (
+            <div style={{ fontWeight: 'bold', textAlign: 'right', fontSize: '10px', marginTop: '2px' }}>
+              Prix de revente : {fmt(resalePrice)}
+            </div>
+          )}
         </div>
 
         {/* New phone */}

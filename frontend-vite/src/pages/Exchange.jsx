@@ -210,6 +210,11 @@ export default function Exchange() {
   // ---------- computed: price difference ----------
   const newPhonePrice = parseFloat(form.new_phone_price) || 0;
   const tradeInValue = parseFloat(form.old_trade_in_value) || 0;
+  const resalePrice = form.old_resale_price
+    ? parseFloat(form.old_resale_price)
+    : tradeInValue > 0
+      ? tradeInValue * 1.2
+      : 0;
   const selectedPhone = phones.find((p) => String(p.id) === String(form.new_phone_id));
   const difference = Math.max(0, newPhonePrice - tradeInValue);
 
@@ -697,24 +702,26 @@ export default function Exchange() {
                 </div>
               )}
 
-              {/* Prix */}
-              <Input
-                label="Valeur de reprise / Prix d'achat (DA) *"
-                type="number"
-                min="0"
-                value={form.old_trade_in_value}
-                onChange={set('old_trade_in_value')}
-                required
-                placeholder="Ex: 20000"
-              />
-              <Input
-                label="Prix de revente (DA)"
-                type="number"
-                min="0"
-                value={form.old_resale_price}
-                onChange={set('old_resale_price')}
-                placeholder="Laissez vide = auto +20%"
-              />
+              {/* Prix — Valeur de reprise & Prix de revente parallèles */}
+              <div className="col-span-2 grid grid-cols-2 gap-3">
+                <Input
+                  label="Valeur de reprise (DA) *"
+                  type="number"
+                  min="0"
+                  value={form.old_trade_in_value}
+                  onChange={set('old_trade_in_value')}
+                  required
+                  placeholder="Ex: 20000"
+                />
+                <Input
+                  label="Prix de revente (DA)"
+                  type="number"
+                  min="0"
+                  value={form.old_resale_price}
+                  onChange={set('old_resale_price')}
+                  placeholder="Laissez vide = auto +20%"
+                />
+              </div>
 
               {/* Notes */}
               <div className="col-span-2">
@@ -750,6 +757,12 @@ export default function Exchange() {
                   <span>– Valeur de reprise (ancien tél.)</span>
                   <span className="font-semibold">– {fmt(tradeInValue)}</span>
                 </div>
+                {resalePrice > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Prix de revente (DA)</span>
+                    <span className="font-semibold">{fmt(resalePrice)}</span>
+                  </div>
+                )}
                 <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between font-black text-base">
                   <span className="text-slate-800">Le client paie</span>
                   <span className="text-emerald-700">{fmt(difference)}</span>
