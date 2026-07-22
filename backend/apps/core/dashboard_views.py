@@ -90,8 +90,8 @@ def dashboard_stats(request):
         total=Coalesce(Sum('final_cost'), 0, output_field=DecimalField())
     )['total']
 
-    # Apply expenses and repairs to net revenue and profit
-    net_revenue = net_revenue - total_expenses + total_repairs_revenue
+    # Apply repairs revenue to net revenue (expenses only affect profit, not revenue)
+    net_revenue = net_revenue + total_repairs_revenue
     net_profit = net_profit - total_expenses + total_repairs_revenue
     
     # Count of net sales (transactions that were not fully refunded)

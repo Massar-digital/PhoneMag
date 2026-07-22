@@ -150,23 +150,31 @@ export const MobileDashboard = () => {
 
       {/* Stats Grid */}
       <div className="px-4 -mt-4">
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-3 mb-3">
           <StatCard
             title="Chiffre d'Affaires"
             value={formatCurrency(stats?.sales?.total_revenue || 0)}
             subtitle={`${stats?.sales?.total_sales || 0} ventes`}
             icon={CurrencyDollarIcon}
             color="green"
-            trend="up"
-            trendValue="+12%"
           />
           <StatCard
-            title="Bénéfice Total"
+            title="Dépenses"
+            value={formatCurrency(stats?.sales?.total_expenses || 0)}
+            subtitle="du jour"
+            icon={ChartBarIcon}
+            color="orange"
+          />
+          <StatCard
+            title="Bénéfice Net"
             value={formatCurrency(stats?.sales?.total_profit || 0)}
             subtitle={`Moy: ${formatCurrency(stats?.sales?.total_profit / (stats?.sales?.total_sales || 1))}`}
             icon={ChartBarIcon}
             color="blue"
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-6">
           <StatCard
             title="Tél. Vendus"
             value={stats?.sales?.total_quantity_sold || 0}

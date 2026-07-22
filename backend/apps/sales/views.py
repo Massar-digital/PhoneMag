@@ -409,8 +409,8 @@ class SaleViewSet(viewsets.ModelViewSet):
             total=Coalesce(Sum('amount'), 0, output_field=DecimalField())
         )['total']
         
-        # Deduct expenses from total revenue as requested
-        total_revenue = raw_revenue - total_refunded - total_expenses
+        # Revenue stays as sales total minus refunds (expenses only affect profit)
+        total_revenue = raw_revenue - total_refunded
         
         # Calculate repairs revenue for the target date (where status='closed' and updated_at is the target date)
         repairs_revenue = RepairTicket.objects.filter(
