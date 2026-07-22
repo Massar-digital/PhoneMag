@@ -52,7 +52,7 @@ jobs:
       #    and version resolution)
       # -------------------------------------------------------------------
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -77,7 +77,7 @@ jobs:
       #    Cache key is computed from backend/requirements.txt hash.
       # -------------------------------------------------------------------
       - name: Setup Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -106,7 +106,7 @@ jobs:
       # 6. Setup Node.js 20 with npm cache
       # -------------------------------------------------------------------
       - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
@@ -157,7 +157,7 @@ jobs:
       #    the release page needs cleanup or debugging.
       # -------------------------------------------------------------------
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PhoneMAG-Windows-${{ github.ref_name }}
           path: |
