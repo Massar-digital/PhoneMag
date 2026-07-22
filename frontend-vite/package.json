@@ -1,7 +1,7 @@
 {
   "name": "phonemag",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Système de gestion de magasin de téléphones",
   "author": "Votre Nom",
   "type": "module",
@@ -16,7 +16,10 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "electron:dev": "electron .",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "npm run build && electron-builder",
+    "ship:patch": "npm version patch && git push --follow-tags",
+    "ship:minor": "npm version minor && git push --follow-tags",
+    "ship:major": "npm version major && git push --follow-tags"
   },
   "build": {
     "appId": "com.phonemag.app",
@@ -26,9 +29,9 @@
         "provider": "github",
         "owner": "Massar-digital",
         "repo": "PhoneMag",
-        "releaseType": "draft"
+        "releaseType": "release"
       }
-],
+    ],
     "files": [
       "dist/**/*",
       "main.cjs",
@@ -56,12 +59,18 @@
       "icon": "Logo.png"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "Logo.png",
       "category": "public.app-category.business"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "Logo.png",
       "category": "Office"
     },
@@ -91,6 +100,7 @@
     "react-hook-form": "^7.48.0",
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.20.0",
+    "react-select": "^5.10.2",
     "react-to-print": "^3.2.0",
     "recharts": "^2.8.0",
     "yup": "^1.3.2"

@@ -311,6 +311,8 @@ export const phonesAPI = {
     });
   },
   delete: (id) => api.delete(`/phones/${id}/`),
+  getModels: (brand) => api.get('/phones/models/', { params: { brand } }),
+  fetchImage: (params) => api.get('/phones/fetch-image/', { params }),
 };
 
 // Sales API

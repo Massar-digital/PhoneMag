@@ -1,4 +1,8 @@
+import re
+import requests
+
 from rest_framework import generics, viewsets, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
@@ -14,6 +18,86 @@ from .serializers import PhoneSerializer, PhoneDetailSerializer
 from .filters import PhoneFilter
 from apps.inventory.models import InventoryItem, StockHistory
 from apps.authentication.permissions import IsManagerOrAdmin, IsAdminForDestructive
+
+
+# Hardcoded seed models for top Algerian market brands so combobox isn't empty on day 1.
+# Merged with DISTINCT results from the phones table at query time.
+SEED_MODELS = {
+    'Apple': ['iPhone 16 Pro Max', 'iPhone 16 Pro', 'iPhone 16 Plus', 'iPhone 16',
+              'iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 15 Plus', 'iPhone 15',
+              'iPhone 14 Pro Max', 'iPhone 14 Pro', 'iPhone 14 Plus', 'iPhone 14',
+              'iPhone 13 Pro Max', 'iPhone 13 Pro', 'iPhone 13', 'iPhone SE 2022',
+              'iPhone 12', 'iPhone 11', 'iPhone XR'],
+    'Samsung': ['Galaxy S25 Ultra', 'Galaxy S25+', 'Galaxy S25',
+                'Galaxy S24 Ultra', 'Galaxy S24+', 'Galaxy S24',
+                'Galaxy S23 Ultra', 'Galaxy S23+', 'Galaxy S23',
+                'Galaxy A55', 'Galaxy A35', 'Galaxy A25', 'Galaxy A15', 'Galaxy A05',
+                'Galaxy Z Fold 6', 'Galaxy Z Flip 6', 'Galaxy Z Fold 5', 'Galaxy Z Flip 5',
+                'Galaxy M55', 'Galaxy M35', 'Galaxy M15'],
+    'Xiaomi': ['Xiaomi 14T Pro', 'Xiaomi 14T', 'Xiaomi 14 Ultra', 'Xiaomi 14',
+               'Xiaomi 13T Pro', 'Xiaomi 13T', 'Xiaomi 13 Ultra', 'Xiaomi 13',
+               'Redmi Note 13 Pro+', 'Redmi Note 13 Pro', 'Redmi Note 13',
+               'Redmi Note 12 Pro+', 'Redmi Note 12 Pro', 'Redmi Note 12',
+               'Poco X6 Pro', 'Poco X6', 'Poco F6 Pro', 'Poco F6', 'Poco M6 Pro',
+               'Redmi 13C', 'Redmi 12C'],
+    'Infinix': ['Infinix Note 40 Pro+', 'Infinix Note 40 Pro', 'Infinix Note 40',
+                'Infinix Hot 40 Pro', 'Infinix Hot 40', 'Infinix Hot 40i',
+                'Infinix Zero 40', 'Infinix Zero 30',
+                'Infinix Smart 9', 'Infinix Smart 8'],
+    'Tecno': ['Tecno Camon 30 Premier', 'Tecno Camon 30 Pro', 'Tecno Camon 30',
+              'Tecno Spark 20 Pro+', 'Tecno Spark 20 Pro', 'Tecno Spark 20', 'Tecno Spark 20C',
+              'Tecno Phantom X2 Pro', 'Tecno Phantom V Fold',
+              'Tecno Pova 6 Pro', 'Tecno Pova 6'],
+    'OnePlus': ['OnePlus 13', 'OnePlus 12', 'OnePlus 12R', 'OnePlus 11',
+                'OnePlus Nord 4', 'OnePlus Nord CE 4', 'OnePlus Nord N30'],
+    'Google': ['Pixel 9 Pro Fold', 'Pixel 9 Pro XL', 'Pixel 9 Pro', 'Pixel 9',
+               'Pixel 8a', 'Pixel 8 Pro', 'Pixel 8'],
+    'Huawei': ['Pura 70 Ultra', 'Pura 70 Pro', 'Pura 70',
+               'Mate 60 Pro', 'Mate 60', 'Nova 12 Ultra', 'Nova 12'],
+}
+
+
+class PhoneModelsView(APIView):
+    """Return distinct model names for a given brand, merged with seed list."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List phone models by brand",
+        description="Returns distinct model names from the phones table for a given brand, merged with a hardcoded seed list.",
+        tags=['Phones'],
+        parameters=[
+            OpenApiParameter(
+                name='brand',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Brand name (case-insensitive)',
+                required=True,
+            ),
+        ],
+    )
+    def get(self, request):
+        brand = (request.query_params.get('brand') or '').strip()
+        if not brand:
+            return Response([], status=status.HTTP_200_OK)
+
+        # Normalise brand key for seed lookup
+        brand_key = {
+            'apple': 'Apple', 'samsung': 'Samsung', 'xiaomi': 'Xiaomi',
+            'infinix': 'Infinix', 'tecno': 'Tecno', 'oneplus': 'OnePlus',
+            'google': 'Google', 'huawei': 'Huawei',
+        }.get(brand.lower())
+
+        # Merge: DB DISTINCT models + seed list, deduped
+        db_models = set(
+            Phone.objects.filter(brand__iexact=brand)
+            .values_list('model', flat=True)
+            .distinct()
+        )
+        seed_models = set(SEED_MODELS.get(brand_key, []))
+
+        merged = sorted(db_models | seed_models)
+        return Response(merged, status=status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -103,6 +187,119 @@ class ProductBarcodeLookupView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Phone.objects.select_related('inventory', 'supplier').all()
+
+
+@extend_schema(
+    summary="Fetch product images from DuckDuckGo",
+    description="Two-step DuckDuckGo image search: (1) GET /?q=... to obtain vqd token, (2) GET /i.js with token to retrieve image JSON. Returns top 3 image URLs. Never crashes — returns empty list on any failure.",
+    tags=['Phones'],
+    parameters=[
+        OpenApiParameter(
+            name='brand',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Phone brand (e.g. Samsung)',
+            required=True,
+        ),
+        OpenApiParameter(
+            name='model',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Phone model (e.g. Galaxy A55)',
+            required=True,
+        ),
+    ],
+)
+class FetchPhoneImageView(APIView):
+    """
+    GET /api/phones/fetch-image/?brand=Samsung&model=Galaxy+A55
+
+    Uses the unofficial DuckDuckGo image search API (two-step token flow).
+    This is inherently fragile — DuckDuckGo may change their token format or
+    HTML structure at any time. The view catches all exceptions gracefully.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    DUCKDUCKGO_URL = 'https://duckduckgo.com/'
+    IMG_API_URL = 'https://duckduckgo.com/i.js'
+    HEADERS = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/125.0.0.0 Safari/537.36'
+        ),
+    }
+
+    def _extract_vqd(self, html):
+        """
+        Extract the vqd token from DuckDuckGo's HTML response.
+        DuckDuckGo requires this token to call i.js.
+        The token format changes occasionally; we try multiple patterns.
+        """
+        patterns = [
+            r'vqd=([\w-]+)&',              # URL-encoded: vqd=abc-123&
+            r'"vqd":"([\w-]+)"',            # JSON-style: "vqd":"abc-123"
+            r'vqd["\']?\s*[:=]\s*["\']([\w-]+)["\']',  # Generic: vqd='abc-123'
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                return match.group(1)
+        return None
+
+    def get(self, request):
+        brand = (request.query_params.get('brand') or '').strip()
+        model = (request.query_params.get('model') or '').strip()
+
+        if not brand or not model:
+            return Response({'images': []})
+
+        query = f'{brand} {model} smartphone official'
+
+        try:
+            # Step 1: Get the vqd token from the main DuckDuckGo search page.
+            # DuckDuckGo's image API requires this per-request token.
+            session = requests.Session()
+            resp = session.get(
+                self.DUCKDUCKGO_URL,
+                params={'q': query, 'iax': 'images', 'ia': 'images'},
+                headers=self.HEADERS,
+                timeout=5,
+            )
+            resp.raise_for_status()
+
+            vqd = self._extract_vqd(resp.text)
+            if not vqd:
+                return Response({'images': []})
+
+            # Step 2: Use the vqd token to fetch the actual image results.
+            img_resp = session.get(
+                self.IMG_API_URL,
+                params={'q': query, 'vqd': vqd, 'o': 'json', 'p': '1'},
+                headers=self.HEADERS,
+                timeout=5,
+            )
+            img_resp.raise_for_status()
+            data = img_resp.json()
+
+            # Extract top 3 image URLs from results.
+            images = []
+            for result in data.get('results', []):
+                url = result.get('image') or result.get('thumbnail')
+                if url:
+                    # Force HTTPS — DuckDuckGo sometimes returns protocol-relative URLs
+                    if url.startswith('//'):
+                        url = 'https:' + url
+                    images.append(url)
+                    if len(images) >= 3:
+                        break
+
+            return Response({'images': images})
+
+        except Exception:
+            # Graceful degradation: never crash the form.
+            return Response({'images': []})
 
 
 @extend_schema_view(

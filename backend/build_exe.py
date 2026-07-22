@@ -7,8 +7,10 @@ from pathlib import Path
 def build():
     root = Path(__file__).resolve().parent
 
-    print("Installing requirements for build...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "waitress", "django-cors-headers", "django-filter", "djangorestframework", "djangorestframework-simplejwt", "drf-spectacular", "python-decouple", "pillow"])
+    print("Upgrading pip and installing pinned requirements...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(root / "requirements.txt")])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "pyinstaller-hooks-contrib"])
 
     print("Building Django backend executable...")
     cmd = [
@@ -17,21 +19,33 @@ def build():
         "--onedir",
         "--console",
         "--name", "serve_backend",
-        "--hidden-import", "django",
-        "--hidden-import", "django.conf",
-        "--hidden-import", "django.core",
+
+        "--collect-all", "django",
+        "--collect-all", "rest_framework",
+        "--collect-all", "rest_framework_simplejwt",
+        "--collect-all", "corsheaders",
+        "--collect-all", "django_filters",
+        "--collect-all", "drf_spectacular",
+        "--collect-all", "waitress",
+
+        "--hidden-import", "django.contrib.staticfiles",
+        "--hidden-import", "django.contrib.contenttypes",
+        "--hidden-import", "django.contrib.auth",
+        "--hidden-import", "django.contrib.sessions",
+        "--hidden-import", "django.contrib.messages",
         "--hidden-import", "django.db.backends.sqlite3",
-        "--hidden-import", "waitress",
-        "--hidden-import", "rest_framework",
-        "--hidden-import", "corsheaders",
-        "--hidden-import", "django_filters",
-        "--hidden-import", "drf_spectacular",
+        "--hidden-import", "django.template.loaders.filesystem",
+        "--hidden-import", "django.template.loaders.app_directories",
+        "--hidden-import", "PIL._imaging",
+        "--hidden-import", "pkg_resources.py2_warn",
+
         "--exclude-module", "PyQt5",
         "--exclude-module", "PyQt6",
         "--exclude-module", "PySide2",
         "--exclude-module", "PySide6",
         "--exclude-module", "matplotlib",
         "--exclude-module", "IPython",
+
         str(root / "serve_backend.py")
     ]
 

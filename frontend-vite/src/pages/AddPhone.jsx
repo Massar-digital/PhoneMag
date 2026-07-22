@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
+import { Controller } from 'react-hook-form';
+import CreatableSelect from 'react-select/creatable';
 import BarcodeLabel from '../components/BarcodeLabel';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
@@ -10,7 +12,9 @@ import { Input, Select, Textarea } from '../components/forms/FormFields';
 import { phonesAPI, suppliersAPI } from '../services/api';
 import { useShopSettings } from '../hooks/useShop';
 import { useFormSubmission } from '../hooks/useFormSubmission';
+import { usePhoneModels } from '../hooks/usePhoneModels';
 import { phoneSchema } from '../utils/validationSchemas';
+import { PhoneImagePicker } from '../components/phones/PhoneImagePicker';
 
 // interface PhoneFormData {
 //   brand;
@@ -24,6 +28,56 @@ import { phoneSchema } from '../utils/validationSchemas';
 //   description;
 //   image: File;
 // }
+
+const colourStyles = {
+  control: (base, state) => ({
+    ...base,
+    backgroundColor: 'white',
+    borderColor: state.isFocused ? '#3b82f6' : '#d1d5db',
+    boxShadow: state.isFocused ? '0 0 0 2px #bfdbfe' : 'none',
+    '&:hover': { borderColor: state.isFocused ? '#3b82f6' : '#9ca3af' },
+    minHeight: '38px',
+    borderRadius: '0.375rem',
+    fontSize: '0.875rem',
+  }),
+  valueContainer: (base) => ({ ...base, padding: '2px 8px' }),
+  input: (base) => ({ ...base, color: '#374151' }),
+  singleValue: (base) => ({ ...base, color: '#374151' }),
+  placeholder: (base) => ({ ...base, color: '#9ca3af', fontSize: '0.875rem' }),
+  menu: (base) => ({
+    ...base,
+    backgroundColor: 'white',
+    border: '1px solid #e5e7eb',
+    borderRadius: '0.375rem',
+    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+    zIndex: 50,
+  }),
+  option: (base, state) => ({
+    ...base,
+    backgroundColor: state.isSelected
+      ? '#3b82f6'
+      : state.isFocused
+        ? '#eff6ff'
+        : 'white',
+    color: state.isSelected ? 'white' : '#374151',
+    fontSize: '0.875rem',
+    padding: '8px 12px',
+    cursor: 'pointer',
+    '&:active': { backgroundColor: state.isSelected ? '#2563eb' : '#dbeafe' },
+  }),
+  menuList: (base) => ({ ...base, maxHeight: '200px' }),
+  noOptionsMessage: (base) => ({ ...base, color: '#6b7280', fontSize: '0.875rem' }),
+  indicatorSeparator: (base) => ({ ...base, backgroundColor: '#d1d5db' }),
+  dropdownIndicator: (base, state) => ({
+    ...base,
+    color: state.isFocused ? '#3b82f6' : '#9ca3af',
+    '&:hover': { color: '#3b82f6' },
+  }),
+  clearIndicator: (base) => ({
+    ...base, color: '#9ca3af', '&:hover': { color: '#ef4444' },
+  }),
+  loadingIndicator: (base) => ({ ...base, color: '#3b82f6' }),
+};
 
 const AddPhone = () => {
   const navigate = useNavigate();
@@ -81,8 +135,17 @@ const AddPhone = () => {
     
     const isPhone = watchedProductType === 'Phone';
     const hasIMEI = watchedIMEI && watchedIMEI.trim().length > 0;
+    const prevBrand = useRef(watchedBrand);
 
-    // Auto-fill "iPhone" when Apple is selected and it's a phone
+    // Reset model when brand changes
+    useEffect(() => {
+      if (prevBrand.current !== watchedBrand) {
+        prevBrand.current = watchedBrand;
+        setValue('model', '');
+      }
+    }, [watchedBrand, setValue]);
+
+    // Auto-fill "iPhone " when Apple is selected and model is empty
     useEffect(() => {
       if (isPhone && watchedBrand?.toLowerCase() === 'apple' && !watchedModel) {
         setValue('model', 'iPhone ');
@@ -303,7 +366,7 @@ const AddPhone = () => {
             reorder_level: 10
           }}
         >
-          {({ register, formState: { errors }, setValue, watch }) => {
+          {({ register, control, formState: { errors }, setValue, watch }) => {
             const watchedImage = watch('image');
             const watchedProductType = watch('product_type') || 'Phone';
             const watchedBrand = watch('brand');
@@ -313,6 +376,7 @@ const AddPhone = () => {
             const isPhoneLike = isPhone || isLaptop;
             const isIPhone = isPhone && watchedBrand?.toLowerCase() === 'apple';
             const hasIMEI = watchedIMEI && watchedIMEI.trim().length > 0;
+            const { data: apiModels = [], isLoading: modelsLoading } = usePhoneModels(watchedBrand);
 
             return (
               <>
@@ -338,11 +402,37 @@ const AddPhone = () => {
                     required
                   />
 
-                  <Input
-                    label="Modèle"
-                    {...register('model')}
-                    error={errors.model}
-                    required
+                  <Controller
+                    name="model"
+                    control={control}
+                    render={({ field: { onChange, value, ref } }) => {
+                      const options = useMemo(
+                        () => apiModels.map((m) => ({ value: m, label: m })),
+                        [apiModels]
+                      );
+                      return (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Modèle<span className="text-red-500 ml-1">*</span>
+                          </label>
+                          <CreatableSelect
+                            inputRef={ref}
+                            options={options}
+                            value={value ? { value, label: value } : null}
+                            onChange={(option) => onChange(option ? option.value : '')}
+                            isLoading={modelsLoading}
+                            placeholder="Saisir le modèle..."
+                            isClearable
+                            formatCreateLabel={(v) => `Ajouter: "${v}"`}
+                            styles={colourStyles}
+                            classNamePrefix="react-select"
+                          />
+                          {errors.model && (
+                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.model.message}</p>
+                          )}
+                        </div>
+                      );
+                    }}
                   />
 
                   {(() => {
@@ -532,6 +622,8 @@ const AddPhone = () => {
                   placeholder="https://exemple.com/image.jpg"
                   helperText="Utilisez cette option pour afficher une photo depuis internet sans l'enregistrer sur le serveur."
                 />
+
+                <PhoneImagePicker watch={watch} setValue={setValue} imageUrl={watch('image_url')} />
 
                 {/* Alternative: Image Upload */}
                 <div className="relative">

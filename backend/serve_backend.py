@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 import django
@@ -28,6 +29,11 @@ except Exception as e:
 application = get_wsgi_application()
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
+
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, base)
+
     port = 8000
     print(f"Starting Django backend with Waitress on http://0.0.0.0:{port}")
     serve(application, host='0.0.0.0', port=port)

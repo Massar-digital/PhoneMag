@@ -1,9 +1,33 @@
 # =============================================================================
 # PhoneMAG Release Pipeline
-# Trigger: git tag v* (e.g. v2.1.0)
-# Runner: windows-latest only
-# Builds: Django backend (PyInstaller) → copies EXE into Electron resources →
-#         builds Electron app (electron-builder) → publishes to GitHub Releases
+#
+# Trigger:    git tag v*.*.* && git push origin v*.*.*
+# Runner:     windows-latest (primary target: Algerian market)
+# Artifacts:  NSIS installer (.exe) + latest.yml -> GitHub Releases
+# Updater:    electron-updater reads latest.yml -> compares versions ->
+#             downloads .exe delta -> prompts restart & install
+#
+# CI/CD Chain:
+#   tag push -> validate tag == package.json version ->
+#   build Django backend (PyInstaller) -> copy to Electron resources ->
+#   build Electron app (vite + electron-builder) ->
+#   electron-builder publishes to GitHub Releases ->
+#   client calls autoUpdater.checkForUpdates() ->
+#   electron-updater fetches latest.yml -> downloads delta -> installs
+#
+# COMMON FAILURE POINTS (first-time setup):
+#   1. GITHUB_TOKEN scope - Built-in token works for public repos.
+#      For private repos, create a classic PAT with `repo` scope
+#      (Settings > Developer settings > Personal access tokens > Tokens classic)
+#      and add as GH_TOKEN secret.
+#   2. releaseType MUST be "release" - electron-updater ignores draft releases.
+#      (Fixed in package.json: releaseType set to "release")
+#   3. PyInstaller on windows-latest includes VC++ redist; local builds may
+#      fail without it. CI is the canonical build environment.
+#   4. Code signing not configured - installer shows "unknown publisher"
+#      warning on Windows. Optional: add a code signing cert later.
+#   5. latest.yml MUST be published alongside the .exe (electron-builder
+#      does this automatically with --publish always).
 # =============================================================================
 
 name: Release
@@ -23,15 +47,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # ---------------------------------------------------------------
-      # 1. Checkout the full repository (needed for git describe etc.)
-      # ---------------------------------------------------------------
+      # -------------------------------------------------------------------
+      # 1. Checkout full history (needed for electron-builder's git metadata
+      #    and version resolution)
+      # -------------------------------------------------------------------
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # ---------------------------------------------------------------
-      # 2. Set up Python 3.12 for the Django backend build
-      # ---------------------------------------------------------------
+      # -------------------------------------------------------------------
+      # 2. Validate that git tag matches package.json version
+      #    Prevents shipping a release where the tag and version are out
+      #    of sync, which would confuse electron-updater comparisons.
+      # -------------------------------------------------------------------
+      - name: Validate version tag matches package.json
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $pkgVersion = (Get-Content frontend-vite/package.json | ConvertFrom-Json).version
+          if ($tag -ne "v$pkgVersion") {
+            Write-Error "Tag '$tag' does not match package.json version 'v$pkgVersion'"
+            exit 1
+          }
+          Write-Host "Tag '$tag' matches package.json version 'v$pkgVersion'"
+
+      # -------------------------------------------------------------------
+      # 3. Setup Python 3.12 with pip cache
+      #    Cache key is computed from backend/requirements.txt hash.
+      # -------------------------------------------------------------------
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
@@ -39,27 +83,28 @@ jobs:
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
 
-      # ---------------------------------------------------------------
-      # 3. Install Python dependencies and build backend EXE
-      #    build_exe.py internally runs PyInstaller → produces
-      #    backend/dist/serve_backend/serve_backend.exe
-      # ---------------------------------------------------------------
+      # -------------------------------------------------------------------
+      # 4. Build Django backend with PyInstaller
+      #    build_exe.py: installs pip deps -> runs PyInstaller --onedir ->
+      #    produces backend/dist/serve_backend/serve_backend.exe
+      # -------------------------------------------------------------------
       - name: Build Django backend with PyInstaller
         run: python backend/build_exe.py
 
-      # ---------------------------------------------------------------
-      # 4. Copy the built backend EXE into the Electron resources folder
-      #    electron-builder's extraResources picks this up as "backend"
-      # ---------------------------------------------------------------
-      - name: Copy backend EXE to frontend resources
+      # -------------------------------------------------------------------
+      # 5. Copy backend EXE bundle into Electron extraResources folder
+      #    electron-builder's "extraResources" config maps
+      #    frontend-vite/build_backend/ -> app/resources/backend/ at runtime
+      # -------------------------------------------------------------------
+      - name: Copy backend EXE to Electron resources
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path frontend-vite/build_backend
           Copy-Item -Recurse -Force backend/dist/serve_backend/* frontend-vite/build_backend/
 
-      # ---------------------------------------------------------------
-      # 5. Set up Node.js 20 and cache npm dependencies
-      # ---------------------------------------------------------------
+      # -------------------------------------------------------------------
+      # 6. Setup Node.js 20 with npm cache
+      # -------------------------------------------------------------------
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -67,34 +112,71 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend-vite/package-lock.json
 
-      # ---------------------------------------------------------------
-      # 6. Clean install dependencies (frozen lockfile — fails if out of
-      #    sync, ensuring reproducible builds)
-      # ---------------------------------------------------------------
+      # -------------------------------------------------------------------
+      # 7. Clean install frontend dependencies
+      #    npm ci enforces frozen lockfile - fails if package-lock.json is
+      #    stale, which prevents silent dependency drift in CI.
+      # -------------------------------------------------------------------
       - name: Install frontend dependencies
         working-directory: frontend-vite
         run: npm ci
 
-      # ---------------------------------------------------------------
-      # 7. Build the Electron app and publish to GitHub Releases
-      #    electron:build runs vite build then electron-builder.
-      #    --publish always uploads the draft release asset.
-      #    GH_TOKEN is auto-injected by GitHub Actions for public repos.
-      # ---------------------------------------------------------------
+      # -------------------------------------------------------------------
+      # 8. Build Electron app and publish to GitHub Releases
+      #
+      #    "npm run electron:build" runs: vite build -> electron-builder
+      #    "--publish always" tells electron-builder to:
+      #      a) Create a GitHub Release (or update if one exists for tag)
+      #      b) Upload all artifacts
+      #      c) **Auto-generate and upload latest.yml** <- critical
+      #
+      #    WHY latest.yml IS CRITICAL FOR AUTO-UPDATES:
+      #    When the client app starts, electron-updater fetches latest.yml
+      #    from the GitHub Releases page. This YAML contains:
+      #      version, path, sha512, releaseDate, url
+      #    The updater compares the version against the installed version.
+      #    If the release version is higher, it downloads the .exe.blockmap
+      #    (delta) and patches the installation. Without latest.yml on the
+      #    release page, the client logs "update not available" regardless
+      #    of how many .exe files are uploaded.
+      #
+      #    GH_TOKEN: Built-in GITHUB_TOKEN works for public repos. For
+      #    private repos, create a classic PAT (repo scope) and add it as
+      #    a GH_TOKEN secret in repo Settings > Secrets and variables.
+      # -------------------------------------------------------------------
       - name: Build & publish Electron app
         working-directory: frontend-vite
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run electron:build -- --publish always
 
-      # ---------------------------------------------------------------
-      # 8. Upload the installer as a build artifact (backup / debugging)
-      #    Glob matches the NSIS installer produced by electron-builder.
-      # ---------------------------------------------------------------
+      # -------------------------------------------------------------------
+      # 9. Upload artifacts as a build artifact (defensive backup)
+      #    The release is already on GitHub Releases from step 8.
+      #    This preserves the binaries in Actions > Artifacts in case
+      #    the release page needs cleanup or debugging.
+      # -------------------------------------------------------------------
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PhoneMAG-Windows-Installer
-          path: frontend-vite/dist_electron/*.exe
+          name: PhoneMAG-Windows-${{ github.ref_name }}
+          path: |
+            frontend-vite/dist_electron/*.exe
+            frontend-vite/dist_electron/*.exe.blockmap
+            frontend-vite/dist_electron/latest.yml
           if-no-files-found: warn
           compression-level: 0
+
+      # -------------------------------------------------------------------
+      # macOS / Linux jobs go here later (add without touching Windows job)
+      #
+      # To add macOS:
+      #   - name: Build & Release (macOS)
+      #     runs-on: macos-latest
+      #     steps: [same structure, change --win to --mac]
+      #
+      # To add Linux:
+      #   - name: Build & Release (Linux)
+      #     runs-on: ubuntu-latest
+      #     steps: [same structure, change --win to --linux]
+      # -------------------------------------------------------------------
