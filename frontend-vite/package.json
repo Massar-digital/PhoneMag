@@ -55,6 +55,16 @@
       "target": "nsis",
       "icon": "Logo.png"
     },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "Logo.png",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "Logo.png",
+      "category": "Office"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

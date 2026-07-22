@@ -122,7 +122,7 @@ class Shop(models.Model):
     barcode_printer_name = models.CharField(
         max_length=255,
         default='Xprinter XP-233B',
-        help_text="Default barcode printer name"
+        help_text="Default barcode printer name (set via CUPS lpadmin on Linux)"
     )
     barcode_label_width = models.DecimalField(
         max_digits=5,

@@ -229,7 +229,7 @@ export function generateCPCLBatch(products, options = {}) {
  * @returns {Promise<{success: boolean, message: string}>} - Result of the print operation
  */
 export async function sendToPrinter(cpclData, printerConfig = {}) {
-  const { printerName = 'Xprinter XP-233B' } = printerConfig;
+  const { printerName } = printerConfig;
 
   // Debug: Log CPCL commands being sent
   console.log('=== CPCL Commands Being Sent ===');

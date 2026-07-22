@@ -83,7 +83,7 @@ const PrintableInvoice = React.forwardRef(({ sale, shopSettings }, ref) => {
       height: '297mm',
       margin: '0 auto',
       padding: '10mm',
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: '"Helvetica Neue", Helvetica, Arial, "DejaVu Sans", "Liberation Sans", sans-serif',
       fontSize: '11px',
       color: 'black',
       boxSizing: 'border-box',
@@ -95,7 +95,7 @@ const PrintableInvoice = React.forwardRef(({ sale, shopSettings }, ref) => {
             @page { size: A4; margin: 0; }
             body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             .printable-invoice { width: 210mm !important; min-height: 297mm !important; height: 297mm !important; padding: 10mm !important; }
-            .printable-invoice { font-family: Arial, sans-serif !important; font-size: 11px !important; color: #000 !important; }
+            .printable-invoice { font-family: "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", "Liberation Sans", sans-serif !important; font-size: 11px !important; color: #000 !important; }
             .printable-invoice table { border-collapse: collapse !important; }
             .printable-invoice .invoice-items-table th,
             .printable-invoice .invoice-items-table td { border: 1px solid black !important; }

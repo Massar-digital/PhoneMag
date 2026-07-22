@@ -40,7 +40,7 @@ const PrintableWarranty = React.forwardRef(({ sale, shopSettings }, ref) => {
             .printable-warranty .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
           }
           .printable-warranty {
-            font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+            font-family: 'Inter', 'Segoe UI', "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", "Liberation Sans", sans-serif;
           }
           .arabic-text {
             font-family: 'Amiri', 'Traditional Arabic', serif;

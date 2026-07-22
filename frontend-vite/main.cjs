@@ -15,9 +15,17 @@ const PRODUCT_ID = '2267e999-6c95-4fb5-bbe3-cd38324a9948';
 const licenseFilePath = path.join(app.getPath('userData'), 'license.json');
 const LICENSE_SALT = 'phonemag-robust-security-2024-v1'; // Sel pour la signature locale
 
+// --- Platform detection ---
+const isWayland = process.env.XDG_SESSION_TYPE === 'wayland' ||
+                  process.env.GDK_BACKEND === 'wayland' ||
+                  process.env.WAYLAND_DISPLAY !== undefined;
+
 // --- Global variables ---
 let backendProcess;
 let mainWindow;
+let isPrinting = false;
+let isPrintingTimestamp = 0;
+const PRINT_TIMEOUT_MS = 60000; // 60s max for any print operation
 
 /**
  * Génère une signature locale pour lier la licence à la machine
@@ -461,21 +469,44 @@ try {
           }
         });
       } else {
-        // On Linux/Mac, use lp command for raw printing
-        execFile('lp', ['-d', targetPrinter, '-o', 'raw', tempDataFile],
-          { timeout: 30000 },
-          (error) => {
+        // On Linux/Mac, use lp command for raw printing (CUPS is built-in on macOS)
+        const installHint = process.platform === 'darwin'
+          ? 'CUPS is built into macOS. Enable it in System Settings > Printers.'
+          : 'Install CUPS: sudo apt install cups';
+        // Check if lp is available first
+        execFile('which', ['lp'], { timeout: 5000 }, (whichError) => {
+          if (whichError) {
             try { fs.unlinkSync(tempDataFile); } catch (e) { /* ignore */ }
-            
-            if (error) {
-              console.error('CPCL Print Error:', error);
-              reject(new Error(`Print failed: ${error.message}`));
-            } else {
-              console.log('CPCL Print Success');
-              resolve({ success: true, message: 'Label printed successfully' });
-            }
+            console.error('CPCL Print Error: lp command not found');
+            reject(new Error(`CUPS/lp not found. ${installHint}`));
+            return;
           }
-        );
+
+          execFile('lp', ['-d', targetPrinter, '-o', 'raw', tempDataFile],
+            { timeout: 30000 },
+            (error, stdout, stderr) => {
+              try { fs.unlinkSync(tempDataFile); } catch (e) { /* ignore */ }
+              
+              if (error) {
+                const msg = stderr || error.message;
+                console.error('CPCL Print Error:', msg);
+                if (msg.includes('not found') || msg.includes('unknown printer')) {
+                  reject(new Error(`Printer "${targetPrinter}" not found. Run 'lpstat -p' to list available printers.`));
+                } else if (msg.includes('permission') || msg.includes('denied')) {
+                  const permHint = process.platform === 'darwin'
+                    ? 'Check System Settings > Printers & Scanners for printer permissions.'
+                    : 'Add user to lp group: sudo usermod -a -G lp $USER';
+                  reject(new Error(`Permission denied. ${permHint}`));
+                } else {
+                  reject(new Error(`Print failed: ${msg}`));
+                }
+              } else {
+                console.log('CPCL Print Success');
+                resolve({ success: true, message: 'Label printed successfully' });
+              }
+            }
+          );
+        });
       }
     } catch (error) {
       console.error('CPCL Print Error:', error);
@@ -641,8 +672,98 @@ const isDev = !app.isPackaged;
 const logPath = path.join(app.getPath('userData'), 'backend.log');
 const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
+/**
+ * Create an invisible print window.
+ *
+ * Wayland constraints (both must be avoided):
+ *   1. show:false → zxdg_exporter_v2 protocol violation → SIGTRAP
+ *   2. show:true + hide() → compositor map/unmap race → GPU buffer
+ *      use-after-free → SIGSEGV in webContents.print()
+ *
+ * Solution: create with show:true but make the window invisible via
+ * transparency/opacity so the surface lifecycle is clean (no hide).
+ */
+function createHiddenPrintWindow(webPreferences = {}) {
+  const printWindow = new BrowserWindow({
+    show: true,
+    width: 1,
+    height: 1,
+    x: -10000,
+    y: -10000,
+    frame: false,
+    transparent: true,
+    opacity: 0,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      ...webPreferences,
+    },
+  });
+  return printWindow;
+}
+
+function restoreMainWindowFocus() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+function runWebContentsPrint(printWindow, printOptions) {
+  return new Promise((resolve) => {
+    if (!printWindow || printWindow.isDestroyed()) {
+      restoreMainWindowFocus();
+      resolve({ success: false, errorType: 'window-destroyed' });
+      return;
+    }
+    printWindow.webContents.print(printOptions, (success, errorType) => {
+      if (!success && errorType !== 'cancelled') {
+        console.error(`Print failed: ${errorType}`);
+        logStream.write(`[${new Date().toISOString()}] Print failed: ${errorType}\n`);
+      }
+      try {
+        if (printWindow && !printWindow.isDestroyed()) {
+          printWindow.removeAllListeners('closed');
+          printWindow.close();
+        }
+      } catch (e) {
+        console.warn('Error closing print window:', e.message);
+      }
+      restoreMainWindowFocus();
+      resolve({ success, errorType });
+    });
+  });
+}
+
 // IPC handler for printing
-ipcMain.on('print', (event, options = {}) => {
+ipcMain.handle('print', async (event, options = {}) => {
+  // Concurrency guard with timeout recovery:
+  // prevent simultaneous print operations from racing on GPU resources
+  // and auto-recover if a print hangs (known Linux/Wayland issue).
+  const now = Date.now();
+  if (isPrinting) {
+    if (now - isPrintingTimestamp < PRINT_TIMEOUT_MS) {
+      console.warn('Print already in progress, rejecting duplicate');
+      return { success: false, errorType: 'print-in-progress' };
+    }
+    console.warn('Print timeout expired, resetting guard and proceeding');
+    isPrinting = false;
+  }
+  isPrinting = true;
+  isPrintingTimestamp = now;
+  try {
+    return await handlePrint(event, options);
+  } finally {
+    isPrinting = false;
+    isPrintingTimestamp = 0;
+  }
+});
+
+async function handlePrint(event, options = {}) {
   const { html, filePath, silent = false, landscape = false, preview = false } = options;
   
   if (filePath) {
@@ -653,7 +774,7 @@ ipcMain.on('print', (event, options = {}) => {
     // Robust path detection
     if (!fs.existsSync(absolutePath)) {
       const potentialPaths = [
-         path.join(app.getPath('userData'), 'custom_warranty.pdf'), // Custom user PDF (Priority 1)
+         path.join(app.getPath('userData'), 'custom_warranty.pdf'),
          path.join(process.resourcesPath || '', 'warranty.pdf'),
          path.join(__dirname, 'public', cleanPath),
          path.join(__dirname, 'dist', cleanPath),
@@ -673,49 +794,48 @@ ipcMain.on('print', (event, options = {}) => {
     if (!fs.existsSync(absolutePath)) {
       console.error(`PDF file not found: ${absolutePath}`);
       dialog.showErrorBox('Fichier non trouvé', `Impossible de trouver le PDF: ${absolutePath}`);
-      return;
+      return { success: false, errorType: 'file-not-found' };
     }
 
-    // PDF PRINTING STRATEGY: 
-    // We use a hidden window to load the PDF and then trigger the system print dialog.
-    // This ensures the user stays within the application and sees the print settings.
-    let printWindow = new BrowserWindow({ 
-      show: false, 
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        plugins: true
-      }
-    });
-    
-    // Convert path to file URL for Windows compatibility
+    const printWindow = createHiddenPrintWindow({ plugins: true });
     const fileUrl = pathToFileURL(absolutePath).toString();
-    printWindow.loadURL(fileUrl);
-    
-    printWindow.webContents.on('did-finish-load', () => {
-      // Small timeout to allow the PDF plugin to load the content
-      setTimeout(() => {
-        printWindow.webContents.print({ 
-          silent: false, 
-          printBackground: true,
-          pageSize: 'A4',
-          margins: { marginType: 'printableArea' }
-        }, () => {
-          if (!printWindow.isDestroyed()) {
-            printWindow.close();
-          }
-        });
-      }, 1000);
+
+    return new Promise((resolve) => {
+      let settled = false;
+
+      printWindow.webContents.once('did-finish-load', () => {
+        if (settled) return;
+        settled = true;
+        setTimeout(async () => {
+          const result = await runWebContentsPrint(printWindow, {
+            silent: false,
+            printBackground: true,
+            pageSize: 'A4',
+            margins: { marginType: 'printableArea' },
+          });
+          resolve(result);
+        }, 1000);
+      });
+
+      printWindow.webContents.once('did-fail-load', (_evt, _code, description) => {
+        if (settled) return;
+        settled = true;
+        console.error(`Failed to load PDF for printing: ${description}`);
+        if (!printWindow.isDestroyed()) {
+          printWindow.close();
+        }
+        restoreMainWindowFocus();
+        resolve({ success: false, errorType: description });
+      });
+
+      printWindow.loadURL(fileUrl);
     });
-    return;
   }
 
   if (html) {
-    // Printing HTML content in a window (Prevents "Print Preview not supported" error)
     const isLabelPrint = options.isLabelPrint || false;
     let processedHtml = html;
 
-    // Fix relative paths for production builds
     if (!isDev) {
       const distPath = pathToFileURL(path.join(__dirname, 'dist')).toString() + '/';
       if (processedHtml.includes('<head>')) {
@@ -727,7 +847,6 @@ ipcMain.on('print', (event, options = {}) => {
       }
     }
 
-    // Write HTML to a temporary file to avoid data: URL limitations in production
     const tempHtmlPath = path.join(app.getPath('userData'), `print-${Date.now()}.html`);
     try {
       fs.writeFileSync(tempHtmlPath, processedHtml, 'utf8');
@@ -742,126 +861,52 @@ ipcMain.on('print', (event, options = {}) => {
           fs.unlinkSync(tempHtmlPath);
         }
       } catch (error) {
-        // Non-fatal cleanup failure
         console.warn('Failed to cleanup temp print HTML:', error.message);
       }
     };
     
-    if (isLabelPrint) {
-      // PRO SOLUTION: Directly show the system print dialog for labels
-      // Note: On Wayland, BrowserWindow with show:false triggers zxdg_exporter_v2
-      // protocol violation and SIGTRAP. We create a visible window at (0,0)
-      // then immediately minimize it instead.
-      let printWindow = new BrowserWindow({ 
-        show: true,
-        width: 1,
-        height: 1,
-        x: -10000,
-        y: -10000,
-        frame: false,
-        transparent: true,
-        opacity: 0.0,
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true
-        }
-      });
-      
-      // Hide immediately after creation (works on Wayland since window was visible for a frame)
-      printWindow.hide();
-      
-      printWindow.loadURL(tempHtmlUrl);
-      
-      printWindow.webContents.on('did-finish-load', () => {
+    const printWindow = createHiddenPrintWindow();
+    printWindow.on('closed', cleanupTempHtml);
+
+    return new Promise((resolve) => {
+      let settled = false;
+
+      printWindow.webContents.once('did-finish-load', async () => {
+        if (settled) return;
+        settled = true;
+        const marginType = options.marginType || (isLabelPrint ? 'none' : 'printableArea');
         const printOptions = {
-          silent: false, // Always show dialog for labels as requested
+          silent: preview ? false : silent,
           printBackground: true,
-          landscape: false,
-          pageSize: 'A4',
-          margins: { marginType: 'none' }
+          landscape: isLabelPrint ? false : landscape,
+          margins: { marginType },
+          pageSize: options.pageSize || 'A4',
         };
 
-        printWindow.webContents.print(printOptions, (success, errorType) => {
-          if (!success && errorType !== 'cancelled') {
-            console.error('Label printing failed:', errorType);
-          }
-          if (!printWindow.isDestroyed()) {
-            printWindow.close();
-          }
-          cleanupTempHtml();
-        });
+        const result = await runWebContentsPrint(printWindow, printOptions);
+        resolve(result);
       });
-      printWindow.on('closed', cleanupTempHtml);
-      return;
-    }
-    
-    // Regular HTML printing (non-label)
-    // Note: On Wayland, BrowserWindow with show:false triggers a protocol
-    // violation (zxdg_exporter_v2) and SIGTRAP. Create window visible at
-    // an off-screen position then hide immediately.
-    let printWindow = new BrowserWindow({ 
-      show: true,
-      width: 1,
-      height: 1,
-      x: -10000,
-      y: -10000,
-      frame: false,
-      transparent: true,
-      opacity: 0.0,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true
-      }
-    });
-    
-    // Hide after creation (safe on Wayland since window was briefly visible)
-    printWindow.hide();
-    
-    // Load from temp file to ensure assets/fonts resolve in production builds
-    printWindow.loadURL(tempHtmlUrl);
-    
-    printWindow.webContents.on('did-finish-load', async () => {
-      // Regular printing (non-label)
-      // Use custom pageSize if provided, otherwise default to A4
-      const marginType = options.marginType || 'printableArea';
-      const printOptions = {
-        silent: silent,
-        printBackground: true,
-        landscape: landscape,
-        margins: { marginType },
-        pageSize: options.pageSize || 'A4',
-      };
 
-      if (preview) {
-        // Just show the window and let user trigger print via system dialog or keep it as is
-        // For a true "preview", system dialog with silent: false is best in Electron
-        printWindow.webContents.print({ ...printOptions, silent: false }, (success, errorType) => {
-          if (!success && errorType !== 'cancelled') {
-            console.error(`Print failed: ${errorType}`);
-          }
-          // In most cases we want to close the window after the dialog is closed
-          if (!printWindow.isDestroyed()) {
-            printWindow.close();
-          }
-          cleanupTempHtml();
-        });
-      } else {
-        printWindow.webContents.print(printOptions, (success, errorType) => {
-          if (!success && errorType !== 'cancelled') {
-            console.error(`Print failed: ${errorType}`);
-            logStream.write(`[${new Date().toISOString()}] Print failed: ${errorType}\n`);
-          }
-          if (!printWindow.isDestroyed()) {
-            printWindow.close();
-          }
-          cleanupTempHtml();
-        });
-      }
+      printWindow.webContents.once('did-fail-load', (_evt, _code, description) => {
+        if (settled) return;
+        settled = true;
+        console.error(`Failed to load HTML for printing: ${description}`);
+        if (!printWindow.isDestroyed()) {
+          printWindow.close();
+        }
+        resolve({ success: false, errorType: description });
+      });
+
+      printWindow.loadURL(tempHtmlUrl);
     });
-    printWindow.on('closed', cleanupTempHtml);
-  } else {
-    // Standard window printing if no HTML provided
-    const win = BrowserWindow.fromWebContents(event.sender);
+  }
+
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) {
+    return { success: false, errorType: 'no-window' };
+  }
+
+  return new Promise((resolve) => {
     win.webContents.print({
       silent: silent,
       printBackground: true,
@@ -872,9 +917,11 @@ ipcMain.on('print', (event, options = {}) => {
         console.error(`Print failed: ${errorType}`);
         logStream.write(`[${new Date().toISOString()}] Print failed: ${errorType}\n`);
       }
+      restoreMainWindowFocus();
+      resolve({ success, errorType });
     });
-  }
-});
+  });
+}
 
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -1018,7 +1065,8 @@ function startBackend() {
       });
     } else {
       // In production, run the bundled executable
-      const executablePath = path.join(process.resourcesPath, 'backend', 'serve_backend.exe');
+      const backendName = process.platform === 'win32' ? 'serve_backend.exe' : 'serve_backend';
+      const executablePath = path.join(process.resourcesPath, 'backend', backendName);
       console.log(`Launching backend from: ${executablePath}`);
       backendProcess = spawn(executablePath, [], {
         shell: false,
@@ -1163,8 +1211,12 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'light';
 
   // Add DPI scaling support flags to prevent layout issues at 125%+ scaling
-  app.commandLine.appendSwitch('force-device-scale-factor', '1'); // Force standard scaling
-  app.commandLine.appendSwitch('high-dpi-support', '1'); // Enable high DPI support
+  // NOTE: On Wayland, --force-device-scale-factor causes GPU buffer size mismatch
+  // which leads to SIGSEGV in printing (Chromium bug crbug.com/1253604).
+  if (!isWayland) {
+    app.commandLine.appendSwitch('force-device-scale-factor', '1');
+    app.commandLine.appendSwitch('high-dpi-support', '1');
+  }
 
   // Check license before anything else
   const licenseStatus = await validateLicense();

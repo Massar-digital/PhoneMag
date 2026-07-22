@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld(
   'electron',
   {
-    print: (options) => ipcRenderer.send('print', options),
+    print: (options) => ipcRenderer.invoke('print', options),
     isElectron: true,
     // CPCL Label Printer API (for XPrinter XP-233B)
     labelPrinter: {
@@ -71,7 +71,7 @@ contextBridge.exposeInMainWorld(
 // This ensures any call to window.print() (from libraries or legacy code)
 // is routed through our IPC handler, avoiding the "Print Preview not supported" error.
 window.print = () => {
-  ipcRenderer.send('print');
+  ipcRenderer.invoke('print');
 };
 
 window.addEventListener('DOMContentLoaded', () => {

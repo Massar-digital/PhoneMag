@@ -94,11 +94,13 @@ const POS = () => {
     print: async (printIframe) => {
       try {
         if (window.electron && window.electron.print) {
+          window.focus();
           const doc = printIframe.contentDocument || printIframe.contentWindow?.document;
           if (!doc) throw new Error('Print iframe document not available');
           const html = doc.documentElement?.outerHTML || doc.body?.innerHTML || '';
           if (!html) throw new Error('Print content is empty');
           await window.electron.print({ html, preview: true });
+          window.focus();
         } else {
           printIframe.contentWindow.print();
         }
@@ -115,11 +117,13 @@ const POS = () => {
     print: async (printIframe) => {
       try {
         if (window.electron && window.electron.print) {
+          window.focus();
           const doc = printIframe.contentDocument || printIframe.contentWindow?.document;
           if (!doc) throw new Error('Print iframe document not available');
           const html = doc.documentElement?.outerHTML || doc.body?.innerHTML || '';
           if (!html) throw new Error('Print content is empty');
           await window.electron.print({ html, preview: true });
+          window.focus();
         } else {
           printIframe.contentWindow.print();
         }
@@ -135,12 +139,16 @@ const POS = () => {
       try {
         const hasCustom = await window.electron.warranty.checkCustom();
         if (hasCustom) {
-          window.electron.print({ filePath: 'custom_warranty.pdf', preview: true });
+          window.focus();
+          await window.electron.print({ filePath: 'custom_warranty.pdf', preview: true });
+          window.focus();
           return;
         } else {
           const hasDefault = await window.electron.warranty.checkDefault();
           if (hasDefault) {
-            window.electron.print({ filePath: 'warranty.pdf', preview: true });
+            window.focus();
+            await window.electron.print({ filePath: 'warranty.pdf', preview: true });
+            window.focus();
             return;
           }
         }

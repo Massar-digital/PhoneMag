@@ -28,8 +28,10 @@ const NewSaleModal = ({ isOpen, onClose, onSuccess }) => {
     documentTitle: createdSale ? `Facture_${createdSale.invoice_number}` : 'Facture',
     print: async (printIframe) => {
       if (window.electron && window.electron.print) {
+        window.focus();
         const html = printIframe.contentDocument.documentElement.outerHTML;
-        window.electron.print({ html, preview: true });
+        await window.electron.print({ html, preview: true });
+        window.focus();
       } else {
         printIframe.contentWindow.print();
       }

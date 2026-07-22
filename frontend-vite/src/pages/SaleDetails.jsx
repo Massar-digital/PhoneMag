@@ -77,8 +77,10 @@ const SaleDetails = () => {
     documentTitle: sale ? `Facture_${sale.invoice_number}` : 'Facture',
     print: async (printIframe) => {
       if (window.electron && window.electron.print) {
+        window.focus();
         const html = printIframe.contentDocument.documentElement.outerHTML;
-        window.electron.print({ html, preview: true });
+        await window.electron.print({ html, preview: true });
+        window.focus();
       } else {
         printIframe.contentWindow.print();
       }
@@ -91,7 +93,9 @@ const SaleDetails = () => {
       try {
         const hasCustom = await window.electron.warranty.checkCustom();
         if (hasCustom) {
-          window.electron.print({ filePath: 'custom_warranty.pdf', preview: true });
+          window.focus();
+          await window.electron.print({ filePath: 'custom_warranty.pdf', preview: true });
+          window.focus();
           return;
         }
       } catch (error) {
@@ -107,8 +111,10 @@ const SaleDetails = () => {
     documentTitle: sale ? `Garantie_${sale.invoice_number}` : 'Garantie',
     print: async (printIframe) => {
       if (window.electron && window.electron.print) {
+        window.focus();
         const html = printIframe.contentDocument.documentElement.outerHTML;
-        window.electron.print({ html, preview: true });
+        await window.electron.print({ html, preview: true });
+        window.focus();
       } else {
         printIframe.contentWindow.print();
       }
