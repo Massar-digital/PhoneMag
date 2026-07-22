@@ -87,7 +87,7 @@ export function useWarrantyPDF() {
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(black);
-    doc.text('CERTIFICAT DE GARANTIE', pw / 2, y, { align: 'center' });
+    doc.text('WARRANTY - ورقة الضمان', pw / 2, y, { align: 'center' });
     y += 5;
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
@@ -179,37 +179,95 @@ export function useWarrantyPDF() {
     doc.line(m, y, pw - m, y);
     y += 6;
 
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(black);
-    doc.text('CONDITIONS DE GARANTIE', pw / 2, y, { align: 'center' });
+    doc.text('CASES NOT COVERED BY WARRANTY / الحالات غير المشمولة بالضمان', pw / 2, y, { align: 'center' });
     y += 8;
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor('#374151');
-
-    const clauses = [
-      '1. La garantie couvre uniquement les défauts de fabrication et les pannes matérielles constatées par notre technicien agréé. Elle ne couvre pas les dommages esthétiques ou l\'usure normale.',
-      '2. Sont exclus de la garantie : les dommages causés par l\'eau, les chocs, les chutes, une utilisation anormale, l\'ouverture du boîtier par un tiers non agréé, l\'utilisation d\'accessoires non conformes, ou toute modification logicielle non autorisée (root, jailbreak, changement de baseband).',
-      '3. La garantie est limitée au remplacement ou à la réparation du composant défectueux. Aucun remboursement ni échange ne sera accepté après 7 jours suivant l\'achat. Le client doit présenter ce certificat et la facture d\'achat original pour toute réclamation.',
-    ];
-
-    clauses.forEach((text) => {
-      const split = doc.splitTextToSize(text, usable - 8);
-      doc.text(split, m + 4, y);
-      y += split.length * 4.5 + 4;
-    });
-
-    y += 8;
-    doc.setDrawColor(borderColor);
-    doc.line(m, y, pw - m, y);
-    y += 10;
-
-    if (y > ph - 50) {
+    if (y > ph - 100) {
       doc.addPage();
       y = m + 10;
     }
+
+    const colW = (usable - 10) / 2;
+    const enX = m + 4;
+    const arX = pw / 2 + 9;
+    const dividerX = pw / 2 + 4;
+
+    doc.setDrawColor('#d1d5db');
+    doc.line(dividerX, y - 4, dividerX, y + 100);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(black);
+    doc.text('CASES NOT COVERED BY WARRANTY :', enX, y);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor('#374151');
+    const enIntro = doc.splitTextToSize(
+      'The document states that the warranty does not cover damages resulting from abnormal or improper use of the device, specifically including:',
+      colW
+    );
+    doc.text(enIntro, enX, y + 4);
+
+    const enItems = [
+      'Poor maintenance or visible negligence of the device.',
+      'Broken or damaged screen or touch panel.',
+      'Damage caused by water or moisture.',
+      'Any modification or unauthorized use not approved by the company.',
+      'Use of non-original or incompatible accessories or parts.',
+      'Excessive or improper use, or opening the device by the user.',
+      'Unauthorized repair: If the device has been repaired by a non-authorized technician.',
+      'Software/Hardware Tampering: Use of a non-original charger or tampering with the device\'s software, such as changing the Baseband.',
+    ];
+
+    let bulletY = y + 4 + enIntro.length * 3.5 + 3;
+    enItems.forEach((item) => {
+      const lines = doc.splitTextToSize(`- ${item}`, colW - 4);
+      doc.text(lines, enX + 2, bulletY);
+      bulletY += lines.length * 3.5 + 1.5;
+    });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(black);
+    const arTitle = '⚠️ الحالات غير المشمولة بالضمان';
+    doc.text(arTitle, pw - m - 4, y, { align: 'right' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor('#374151');
+    const arIntro = 'الضمان لا يشمل الأعطال الناتجة عن الاستخدام غير الطبيعي للجهاز، وتشمل الحالات التالية:';
+    const arIntroLines = doc.splitTextToSize(arIntro, colW);
+    doc.text(arIntroLines, pw - m - 4, y + 4, { align: 'right' });
+
+    const arItems = [
+      'سوء الصيانة أو الإهمال الواضح للجهاز.',
+      'كسر أو تلف الشاشة أو اللمس.',
+      'التلف الناتج عن الماء أو الرطوبة.',
+      'أي تعديل أو استخدام خاص غير مصرح به من طرف الشركة.',
+      'استخدام ملحقات أو قطع غيار غير أصلية أو غير متوافقة.',
+      'الاستخدام المفرط أو خارج المعايير المعتمدة، أو فتح الجهاز من قبل المستخدم.',
+      'في حال تم تسليم الجهاز لمصلح آخر غير معتمد.',
+      'استخدام شاحن غير أصلي أو التلاعب في برنامج الشحن أو الـ Baseband.',
+    ];
+
+    let arBulletY = y + 4 + arIntroLines.length * 3.5 + 3;
+    arItems.forEach((item) => {
+      const lines = doc.splitTextToSize(item, colW - 4);
+      doc.text(lines, pw - m - 6, arBulletY, { align: 'right' });
+      arBulletY += lines.length * 3.5 + 1.5;
+    });
+
+    y = Math.max(bulletY, arBulletY) + 6;
+
+    if (y > ph - 40) {
+      doc.addPage();
+      y = m + 10;
+    }
+
+    doc.setDrawColor(borderColor);
+    doc.line(m, y, pw - m, y);
+    y += 10;
 
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
