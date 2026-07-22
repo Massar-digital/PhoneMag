@@ -4,7 +4,16 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   base: './',
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'remove-crossorigin',
+      transformIndexHtml: {
+        order: 'post',
+        handler: (html) => html.replace(/\s+crossorigin(=["'][^"']*["'])?/g, ''),
+      },
+    },
+  ],
   build: {
     // Production build settings
     outDir: 'dist',
@@ -13,7 +22,7 @@ export default defineConfig({
     minify: 'terser', // Use terser for better minification
     terserOptions: {
       compress: {
-        drop_console: true, // Remove console.log in production
+        drop_console: ['log', 'info'], // Keep warn/error in production
         drop_debugger: true, // Remove debugger statements
       },
     },
