@@ -5,6 +5,7 @@ import { suppliersAPI } from '../services/api';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Table } from '../components/common/Table';
+import { Card } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
 import { AddEditSupplierModal } from './AddEditSupplierModal';
 import { toast } from 'react-hot-toast';
