@@ -3,6 +3,17 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { spawn, exec, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+// Authenticate with private GitHub repo for auto-updates
+const GH_TOKEN = process.env.GH_TOKEN || '';
+if (GH_TOKEN) {
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'Massar-digital',
+    repo: 'PhoneMag',
+    private: true,
+    token: GH_TOKEN
+  });
+}
 const fs = require('fs');
 const os = require('os');
 const { machineIdSync } = require('node-machine-id');
@@ -988,6 +999,7 @@ autoUpdater.on('update-downloaded', (info) => {
     cancelId: 1
   }).then((result) => {
     if (result.response === 0) {
+      killBackend();
       autoUpdater.quitAndInstall();
     }
   });
@@ -1229,17 +1241,21 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on('before-quit', () => {
+function killBackend() {
   if (backendProcess) {
-    if (process.platform === 'win32') {
-      try {
+    try {
+      if (process.platform === 'win32') {
         require('child_process').execSync(`taskkill /pid ${backendProcess.pid} /f /t`);
-      } catch (e) {}
-    } else {
-      backendProcess.kill();
-    }
+      } else {
+        backendProcess.kill('SIGKILL');
+      }
+    } catch (e) {}
     backendProcess = null;
   }
+}
+
+app.on('before-quit', () => {
+  killBackend();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
