@@ -3,17 +3,6 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { spawn, exec, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
-// Authenticate with private GitHub repo for auto-updates
-const GH_TOKEN = process.env.GH_TOKEN || '';
-if (GH_TOKEN) {
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'Massar-digital',
-    repo: 'PhoneMag',
-    private: true,
-    token: GH_TOKEN
-  });
-}
 const fs = require('fs');
 const os = require('os');
 const { machineIdSync } = require('node-machine-id');
@@ -936,6 +925,9 @@ async function handlePrint(event, options = {}) {
 
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
+if (process.platform === 'linux') {
+  autoUpdater.autoInstallOnAppQuit = false;
+}
 autoUpdater.allowDowngrade = false;
 
 // Helper to send update events to renderer
@@ -988,6 +980,24 @@ autoUpdater.on('update-downloaded', (info) => {
   logStream.write(`[${new Date().toISOString()}] Update downloaded: ${info.version}\n`);
   sendUpdateMessage('update_downloaded', info);
   
+  if (process.platform === 'linux') {
+    const downloadedPath = info.downloadedFile;
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Mise à jour téléchargée',
+      message: `La version ${info.version} a été téléchargée.`,
+      detail: `Fichier: ${downloadedPath}\n\nPour installer: fermez l'application et exécutez le fichier téléchargé manuellement.`,
+      buttons: ['Ouvrir le dossier', 'Plus tard'],
+      defaultId: 1,
+      cancelId: 1
+    }).then((result) => {
+      if (result.response === 0) {
+        shell.showItemInFolder(downloadedPath);
+      }
+    });
+    return;
+  }
+
   // Show a dialog asking user to restart
   dialog.showMessageBox(mainWindow, {
     type: 'info',
@@ -997,15 +1007,18 @@ autoUpdater.on('update-downloaded', (info) => {
     buttons: ['Redémarrer maintenant', 'Plus tard'],
     defaultId: 0,
     cancelId: 1
-  }).then((result) => {
+  }).then(async (result) => {
     if (result.response === 0) {
-      killBackend();
-      autoUpdater.quitAndInstall();
+      await killBackend();
+      autoUpdater.quitAndInstall(false, true);
     }
   });
 });
 
 autoUpdater.on('error', (err) => {
+  if (process.platform === 'linux' && err.message.includes('pkexec')) {
+    return;
+  }
   console.error('Error in auto-updater:', err);
   logStream.write(`[${new Date().toISOString()}] UPDATER ERROR: ${err.message}\n`);
   sendUpdateMessage('update_error', err.message);
@@ -1020,7 +1033,7 @@ ipcMain.on('quit-and-install', () => {
   autoUpdater.quitAndInstall();
 });
 
-function checkUpdates() {
+function checkUpdates(retryCount = 0) {
   if (isDev) {
     // In development mode, simulate the update check flow
     console.log('Development mode: Simulating update check...');
@@ -1035,7 +1048,16 @@ function checkUpdates() {
   
   console.log('Checking for updates...');
   logStream.write(`[${new Date().toISOString()}] Explicit update check trigger...\n`);
-  autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.error(`Update check failed (attempt ${retryCount + 1}):`, err.message);
+    logStream.write(`[${new Date().toISOString()}] Update check error: ${err.message}\n`);
+    if (retryCount < 3) {
+      const delay = Math.pow(2, retryCount + 1) * 1000;
+      setTimeout(() => checkUpdates(retryCount + 1), delay);
+    } else {
+      logStream.write(`[${new Date().toISOString()}] Update check failed after 3 retries, giving up.\n`);
+    }
+  });
 }
 
 function startBackend() {
@@ -1242,20 +1264,36 @@ app.whenReady().then(async () => {
 });
 
 function killBackend() {
-  if (backendProcess) {
+  return new Promise((resolve) => {
+    if (!backendProcess) return resolve();
+    const pid = backendProcess.pid;
+    const timeout = setTimeout(() => {
+      backendProcess = null;
+      resolve();
+    }, 3000);
+    backendProcess.on('exit', () => {
+      clearTimeout(timeout);
+      backendProcess = null;
+      resolve();
+    });
     try {
       if (process.platform === 'win32') {
-        require('child_process').execSync(`taskkill /pid ${backendProcess.pid} /f /t`);
+        require('child_process').execSync(`taskkill /pid ${pid} /f /t`);
       } else {
         backendProcess.kill('SIGKILL');
       }
-    } catch (e) {}
-    backendProcess = null;
-  }
+    } catch (e) {
+      clearTimeout(timeout);
+      backendProcess = null;
+      resolve();
+    }
+  });
 }
 
-app.on('before-quit', () => {
-  killBackend();
+app.on('before-quit', async (event) => {
+  event.preventDefault();
+  await killBackend();
+  app.quit();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
