@@ -1,9 +1,10 @@
 {
   "name": "phonemag",
   "private": true,
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Système de gestion de magasin de téléphones",
-  "author": "Votre Nom",
+  "author": "Aymen Belkadi <aymen.belkadi01@gmail.com>",
+  "homepage": "https://github.com/Massar-digital/PhoneMag",
   "type": "module",
   "main": "main.cjs",
   "scripts": {

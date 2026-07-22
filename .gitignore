@@ -23,6 +23,13 @@ build/
 .eslintcache
 *.log
 
+# PyInstaller
+*.spec
+
+# Electron build output
+frontend-vite/dist_electron/
+frontend-vite/build_backend/
+
 # IDEs
 .vscode/
 .idea/
