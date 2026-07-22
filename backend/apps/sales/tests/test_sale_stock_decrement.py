@@ -602,7 +602,7 @@ def test_saleitem_validation_and_snapshot_recreation(user):
         color="Green",
         condition="New",
     )
-    stock_inventory = InventoryItem.objects.create(phone=stock_phone, stock_quantity=1)
+    stock_inventory = InventoryItem.objects.create(phone=stock_phone, stock_quantity=2)
     sale = Sale.objects.create(total_price=Decimal("700.00"), customer_name="Item Update", payment_method="Cash")
     sale_item = SaleItem.objects.create(
         sale=sale,
@@ -612,13 +612,13 @@ def test_saleitem_validation_and_snapshot_recreation(user):
         discount_applied=Decimal("0.00"),
     )
     stock_inventory.refresh_from_db()
-    assert stock_inventory.stock_quantity == 0
+    assert stock_inventory.stock_quantity == 1
 
     sale_item.quantity = 2
     sale_item.unit_price = Decimal("700.00")
     sale_item.save()
     stock_inventory.refresh_from_db()
-    assert stock_inventory.stock_quantity == -1
+    assert stock_inventory.stock_quantity == 0
 
     used_phone = Phone.objects.create(
         product_type="Phone",
