@@ -36,6 +36,9 @@ frontend-vite/build_backend/
 *.swp
 *.swo
 
+# Notes / scratch
+mise a jour.txt
+
 # OS files
 .DS_Store
 Thumbs.db
