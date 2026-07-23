@@ -40,6 +40,7 @@ export function Table({
   selectedRows,
   onRowSelect,
   onSelectAll,
+  onRowClick,
   pagination,
   caption,
   ariaLabel,
@@ -131,8 +132,9 @@ export function Table({
               safeData.map((row, i) => (
                 <tr
                   key={i}
-                  className="border-b hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  className={`border-b hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
                   role="row"
+                  onClick={() => onRowClick && onRowClick(row)}
                 >
                   {selectableRows && (
                     <td className="px-[clamp(0.5rem,1.5vw,1rem)] py-[clamp(0.4rem,1vw,0.8rem)] text-center" role="gridcell">

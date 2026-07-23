@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
 import { suppliersAPI } from '../services/api';
 
@@ -12,6 +12,7 @@ import { AddEditSupplierModal } from './AddEditSupplierModal';
 import { toast } from 'react-hot-toast';
 
 export const SuppliersList = () => {
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,11 +59,7 @@ export const SuppliersList = () => {
     {
       key: 'name',
       label: 'Nom du fournisseur',
-      render: (value, supplier) => (
-        <Link to={`/suppliers/${supplier.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
-          {value}
-        </Link>
-      ),
+      render: (value) => <span className="font-medium text-gray-900">{value}</span>,
     },
     {
       key: 'contact_person',
@@ -141,6 +138,7 @@ export const SuppliersList = () => {
           data={suppliers}
           loading={loading}
           emptyMessage="Aucun fournisseur trouvé."
+          onRowClick={(row) => navigate(`/suppliers/${row.id}`)}
         />
       </Card>
 
