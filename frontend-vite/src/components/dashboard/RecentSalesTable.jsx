@@ -9,6 +9,7 @@ import {
   BanknotesIcon,
   ShoppingBagIcon
 } from '@heroicons/react/24/outline';
+import { getProductEmoji } from '../../utils/productIcons';
 
 // interface RecentSalesTableProps {
 //   sales: RecentSale[];
@@ -149,8 +150,8 @@ export const RecentSalesTable = ({ sales, loading }) => {
                   </td>
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                        <DevicePhoneMobileIcon className="w-4 h-4 text-slate-500" />
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg">
+                        {getProductEmoji(sale.phone_details?.product_type)}
                       </div>
                       <span className={`text-sm ${isFullyReturned ? 'text-red-600 line-through decoration-red-300' : 'text-slate-700'}`}>
                         {sale.phone_details ? `${sale.phone_details.brand} ${sale.phone_details.model}` : 'Inconnu'}
@@ -226,7 +227,7 @@ export const RecentSalesTable = ({ sales, loading }) => {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <DevicePhoneMobileIcon className={`w-4 h-4 ${isFullyReturned ? 'text-red-300' : 'text-slate-400'}`} />
+                  <span className="text-lg">{getProductEmoji(sale.phone_details?.product_type)}</span>
                   <span className={`${isFullyReturned ? 'text-red-600' : 'text-slate-600'}`}>
                     {sale.phone_details ? `${sale.phone_details.brand} ${sale.phone_details.model}` : 'Inconnu'}
                   </span>

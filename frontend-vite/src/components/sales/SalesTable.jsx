@@ -19,6 +19,7 @@ import {
   ArrowUturnLeftIcon
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/solid';
+import { getProductEmoji } from '../../utils/productIcons';
 
 const paymentMethodIcons = {
   Cash: <BanknotesIcon className="w-4 h-4" />,
@@ -205,8 +206,8 @@ export const SalesTable = ({
                 
                 <td className="py-4 px-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                      <CubeIcon className="w-4 h-4 text-slate-500" />
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-lg">
+                      {getProductEmoji(sale.phone_details?.product_type)}
                     </div>
                     <div>
                       <span className="text-sm text-slate-700 block leading-tight">
@@ -216,6 +217,22 @@ export const SalesTable = ({
                           sale.product_name_at_sale || sale.items?.[0]?.product_name_at_sale || 'Inconnu'
                         )}
                       </span>
+                      {sale.phone_details?.product_type && (
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {sale.phone_details.product_type === 'Phone' ? '📱 Téléphone' :
+                           sale.phone_details.product_type === 'Laptop' ? '💻 Laptop' :
+                           sale.phone_details.product_type === 'Case' ? '🛡️ Coque' :
+                           sale.phone_details.product_type === 'Charger' ? '🔌 Chargeur' :
+                           sale.phone_details.product_type === 'Cable' ? '🔗 Câble' :
+                           sale.phone_details.product_type === 'Screen Protector' ? '🪟 Protection écran' :
+                           sale.phone_details.product_type === 'Headphones' ? '🎧 Casque' :
+                           sale.phone_details.product_type === 'Earphones' ? '🎧 Écouteurs' :
+                           sale.phone_details.product_type === 'Power Bank' ? '🔋 Batterie externe' :
+                           sale.phone_details.product_type === 'Memory Card' ? '💾 Carte mémoire' :
+                           sale.phone_details.product_type === 'Adapter' ? '🔌 Adaptateur' :
+                           sale.phone_details.product_type === 'Holder' ? '🚗 Support' : '📦 Accessoire'}
+                        </span>
+                      )}
                       {sale.items?.length > 1 && (
                         <span className="text-[10px] text-slate-400">Articles multiples</span>
                       )}
@@ -407,7 +424,7 @@ export const SalesTable = ({
 
               <div className="space-y-2 mb-3">
                 <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CubeIcon className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-lg flex-shrink-0">{getProductEmoji(sale.phone_details?.product_type)}</span>
                   <span className="truncate">
                     {sale.phone_details ? `${sale.phone_details.brand} ${sale.phone_details.model}` : sale.product_name_at_sale || 'N/A'}
                   </span>
