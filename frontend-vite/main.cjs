@@ -1,19 +1,11 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, safeStorage } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { spawn, exec, execFile } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const fs = require('fs');
 const os = require('os');
-const { machineIdSync } = require('node-machine-id');
-const axios = require('axios');
-const crypto = require('crypto');
-
-// --- Keygen Licensing Configuration ---
-const KEYGEN_ACCOUNT_ID = '5d66c27f-cc98-4aca-83eb-7a24c04fac84';
-const PRODUCT_ID = '2267e999-6c95-4fb5-bbe3-cd38324a9948';
-const licenseFilePath = path.join(app.getPath('userData'), 'license.json');
-const LICENSE_SALT = 'phonemag-robust-security-2024-v1'; // Sel pour la signature locale
+const http = require('http');
 
 // --- Platform detection ---
 const isWayland = process.env.XDG_SESSION_TYPE === 'wayland' ||
@@ -27,290 +19,127 @@ let isPrinting = false;
 let isPrintingTimestamp = 0;
 const PRINT_TIMEOUT_MS = 60000; // 60s max for any print operation
 
+
+
 /**
- * Génère une signature locale pour lier la licence à la machine
- * Empêche le simple copier-coller du fichier de licence sur une autre machine
+ * Opens a small license activation window (no main app until activated).
  */
-function generateSignature(key, fingerprint) {
-  return crypto
-    .createHash('sha256')
-    .update(`${key}-${fingerprint}-${LICENSE_SALT}`)
-    .digest('hex');
+function openLicenseWindow() {
+  const licenseWin = new BrowserWindow({
+    width: 480,
+    height: 340,
+    resizable: false,
+    frame: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
+    },
+  });
+  licenseWin.setMenu(null);
+
+  const startUrl = isDev
+    ? 'http://localhost:3000/#/license'
+    : `file://${path.join(__dirname, 'dist', 'index.html')}#/license`.replace(/\\/g, '/');
+
+  licenseWin.loadURL(startUrl).catch(e => console.error('License window load error:', e));
 }
 
 /**
- * Récupère l'ID unique du PC (Fingerprint)
+ * Called by the renderer after a successful activation.
+ * Encrypts the code via safeStorage, closes the license window, opens the full app.
  */
-function getMachineId() {
+ipcMain.handle('license-activated', async (_event, code) => {
+  const encPath = path.join(app.getPath('userData'), 'license.enc');
   try {
-    return machineIdSync();
-  } catch (error) {
-    console.error('Machine ID Error:', error);
-    return 'default-fingerprint';
-  }
-}
-
-/**
- * Phase 1: Activation de la licence
- */
-async function activateLicense(licenseKey) {
-  const fingerprint = getMachineId();
-  const headers = {
-    'Content-Type': 'application/vnd.api+json',
-    'Accept': 'application/vnd.api+json'
-  };
-  
-  try {
-    // ÉTAPE 1 : Valider la clé pour obtenir les infos de la licence
-    const validation = await axios.post(
-      `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}/licenses/actions/validate-key`,
-      {
-        meta: {
-          key: licenseKey,
-          scope: { product: PRODUCT_ID }
-        }
-      },
-      { headers }
-    );
-
-    const { data: license } = validation.data;
-
-    // ÉTAPE 2 : Si la licence est trouvée, on enregistre ce PC (Machine)
-    try {
-      await axios.post(
-        `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}/machines`,
-        {
-          data: {
-            type: 'machines',
-            attributes: {
-              fingerprint: fingerprint,
-              name: `PC-${fingerprint.substring(0, 8)}`
-            },
-            relationships: {
-              license: {
-                data: { type: 'licenses', id: license.id }
-              }
-            }
-          }
-        },
-        { 
-          headers: {
-            ...headers,
-            'Authorization': `License ${licenseKey}`
-          }
-        }
-      );
-    } catch (machineError) {
-      const detail = machineError.response?.data?.errors?.[0]?.detail || "";
-      // Si la machine existe déjà pour cette licence, ce n'est pas une erreur
-      if (!detail.includes("already exists") && !detail.includes("taken")) {
-        throw machineError;
-      }
+    if (safeStorage.isEncryptionAvailable()) {
+      fs.writeFileSync(encPath, safeStorage.encryptString(code));
+    } else {
+      fs.writeFileSync(encPath, code, 'utf8');
     }
-
-    // Sauvegarde locale sécurisée avec signature liée au hardware
-    const signature = generateSignature(licenseKey, fingerprint);
-    const licenseData = {
-      key: licenseKey,
-      id: license.id,
-      fingerprint: fingerprint,
-      activatedAt: new Date().toISOString(),
-      signature: signature,
-      lastOnlineStatus: 'valid',
-      lastOnlineCheck: new Date().toISOString()
-    };
-
-    fs.writeFileSync(licenseFilePath, JSON.stringify(licenseData, null, 2));
-    
-    
-    return { success: true };
-
-  } catch (error) {
-    const errorData = error.response?.data;
-    const errorDetail = errorData?.errors?.[0]?.detail || error.message;
-    const errorCode = errorData?.errors?.[0]?.code;
-    
-    console.error('Erreur Activation:', JSON.stringify(errorData || error.message));
-    
-    if (errorCode === 'MACHINE_LIMIT_REACHED') {
-      return { success: false, message: 'Limite de postes atteinte (max 1 PC).' };
-    }
-    if (errorCode === 'NOT_FOUND' || errorDetail.includes('not found')) {
-      return { success: false, message: 'Clé de licence invalide ou introuvable.' };
-    }
-    
-    return { success: false, message: `Erreur: ${errorDetail}` };
-  }
-}
-
-/**
- * Migration rétroactive : Met à jour les anciens fichiers de licence
- * pour les rendre compatibles avec le nouveau système sécurisé
- */
-function migrateOldLicense(licenseData, currentFingerprint) {
-  try {
-    // Si la licence a déjà les champs modernes, pas besoin de migrer
-    if (licenseData.fingerprint && licenseData.signature) {
-      return null; // Pas de migration nécessaire
-    }
-
-    // Sinon, on met à jour l'ancien format vers le nouveau
-    console.log("Migration: Mise à jour du fichier de licence au nouveau format sécurisé...");
-    
-    const migratedData = {
-      key: licenseData.key,
-      id: licenseData.id,
-      fingerprint: currentFingerprint,
-      activatedAt: licenseData.activatedAt || new Date().toISOString(),
-      signature: generateSignature(licenseData.key, currentFingerprint)
-    };
-
-    // Sauvegarde la version mise à jour
-    fs.writeFileSync(licenseFilePath, JSON.stringify(migratedData, null, 2));
-    console.log("Migration: Fichier de licence migré avec succès.");
-    
-    return migratedData;
-  } catch (error) {
-    console.error('Erreur lors de la migration:', error);
-    return null;
-  }
-}
-
-/**
- * Phase 2: Validation de la licence au démarrage (RAPIDE & LOCALE)
- * - Première ouverture (pas de fichier) → page d'activation
- * - Ouvertures suivantes → accepter immédiatement si la validation locale passe
- * - Vérification en ligne uniquement en arrière-plan et seulement si connecté
- * - Hors ligne → utiliser le dernier résultat en ligne connu
- */
-async function validateLicense() {
-  if (!fs.existsSync(licenseFilePath)) {
-    console.log("Validation: Aucun fichier de licence trouvé (première installation).");
-    return { success: false, reason: 'NOT_FOUND', message: 'Aucune licence trouvée.' };
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 
-  try {
-    const fileContent = fs.readFileSync(licenseFilePath, 'utf8');
-    let licenseData = JSON.parse(fileContent);
-    const currentFingerprint = getMachineId();
-
-    // 0. Migration
-    if (!licenseData.fingerprint || !licenseData.signature) {
-      const migratedData = migrateOldLicense(licenseData, currentFingerprint);
-      if (migratedData) licenseData = migratedData;
-      else return { success: false, reason: 'MIGRATION_FAILED' };
-    }
-
-    // 1. Validation Locale (Hardware + Signature) - TRÈS RAPIDE
-    const expectedSignature = generateSignature(licenseData.key, licenseData.fingerprint);
-    
-    if (licenseData.signature !== expectedSignature) {
-      console.error("Validation: Signature locale invalide.");
-      return { success: false, reason: 'INVALID_SIGNATURE' };
-    }
-
-    if (licenseData.fingerprint !== currentFingerprint) {
-      console.error("Validation: Hardware mismatch.");
-      return { success: false, reason: 'HARDWARE_MISMATCH' };
-    }
-
-    // 2. Vérifier le dernier statut en ligne connu
-    //    Si la dernière vérification en ligne a trouvé la clé révoquée, bloquer
-    if (licenseData.lastOnlineStatus === 'revoked') {
-      console.warn("Validation: Licence révoquée lors de la dernière vérification en ligne.");
-      return { success: false, reason: 'REVOKED', message: 'Votre licence a été révoquée. Veuillez contacter le support.' };
-    }
-
-    // 3. Licence locale valide → accepter immédiatement
-    console.log("Validation: Licence locale valide. Démarrage rapide...");
-
-    // 4. Vérification en ligne en arrière-plan (non-bloquant)
-    //    Ne se lance que si on est connecté. Résultat sauvegardé pour les prochains lancements.
-    setTimeout(() => {
-      performBackgroundOnlineCheck(licenseData.key).catch(console.error);
-    }, 5000);
-
-    return { success: true };
-
-  } catch (error) {
-    console.error('Erreur validation locale:', error);
-    return { success: false, reason: 'ERROR' };
-  }
-}
-
-/**
- * Vérification asynchrone en arrière-plan (non-bloquante)
- * - Vérifie d'abord si on est en ligne avant de faire l'appel API
- * - Si en ligne et la clé est révoquée → marque le statut dans le fichier (JAMAIS de suppression)
- * - Si hors ligne → ne fait rien, garde le dernier résultat connu
- */
-async function performBackgroundOnlineCheck(licenseKey) {
-  try {
-    // Vérifier la connectivité avant d'appeler l'API
-    try {
-      await axios.get('https://api.keygen.sh', { timeout: 5000 });
-    } catch (connectError) {
-      console.log("Background: Hors ligne. Aucune vérification effectuée, statut local préservé.");
-      return; // Pas de connexion → on ne fait rien
-    }
-
-    console.log("Background: En ligne. Vérification de la validité de la clé...");
-    const headers = {
-      'Content-Type': 'application/vnd.api+json',
-      'Accept': 'application/vnd.api+json'
-    };
-    
-    const response = await axios.post(
-      `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}/licenses/actions/validate-key`,
-      {
-        meta: {
-          key: licenseKey,
-          scope: { product: PRODUCT_ID }
-        }
-      },
-      { headers, timeout: 10000 }
-    );
-
-    const { meta } = response.data;
-
-    // Mettre à jour le statut dans le fichier de licence (JAMAIS supprimer le fichier)
-    if (fs.existsSync(licenseFilePath)) {
-      try {
-        const fileContent = fs.readFileSync(licenseFilePath, 'utf8');
-        const licenseData = JSON.parse(fileContent);
-
-        if (meta && !meta.valid) {
-          console.warn("Background: La licence a été révoquée en ligne. Statut mis à jour.");
-          licenseData.lastOnlineStatus = 'revoked';
-        } else {
-          console.log("Background: Licence confirmée en ligne.");
-          licenseData.lastOnlineStatus = 'valid';
-        }
-
-        licenseData.lastOnlineCheck = new Date().toISOString();
-        fs.writeFileSync(licenseFilePath, JSON.stringify(licenseData, null, 2));
-      } catch (fileError) {
-        console.error("Background: Erreur lors de la mise à jour du fichier de licence:", fileError);
-      }
-    }
-  } catch (error) {
-    // Erreur réseau inattendue → on ne touche à rien
-    console.log("Background: Erreur lors de la vérification en ligne. Statut local préservé.");
-  }
-}
-
-
-// --- IPC Handlers pour la licence ---
-ipcMain.handle('license:activate', async (event, key) => {
-  return await activateLicense(key);
+  BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.close(); });
+  createWindow();
+  if (!isDev) setTimeout(checkUpdates, 5000);
+  return { success: true };
 });
 
-ipcMain.handle('license:check', async () => {
-  return await validateLicense();
-});
+/**
+ * Returns the MAC and IPv4 address of the first non-internal,
+ * non-virtual network interface with a valid MAC.
+ */
+function getMachineFingerprint() {
+  const interfaces = os.networkInterfaces();
+  const virtualPrefixes = ['veth', 'docker', 'vbox', 'vmnet', 'br-', 'lo'];
 
-ipcMain.handle('license:get-machine-id', () => {
-  return getMachineId();
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    if (!addrs) continue;
+    if (virtualPrefixes.some(p => name.startsWith(p))) continue;
+
+    const mac = addrs[0]?.mac;
+    if (!mac || mac === '00:00:00:00:00:00') continue;
+
+    const ipv4 = addrs.find(a => a.family === 'IPv4' && !a.internal);
+    return { mac_address: mac, ip_address: ipv4?.address || '' };
+  }
+  return { mac_address: '', ip_address: '' };
+}
+
+ipcMain.handle('get-machine-fingerprint', () => getMachineFingerprint());
+
+/**
+ * Calls ip-api.com for geolocation of the given IP using Node's http module.
+ * Returns silently with empty/null values on any error or 5s timeout.
+ */
+function getGeolocation(ip) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://ip-api.com/json/${ip}?fields=city,country,lat,lon`, { timeout: 5000 }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try {
+          const d = JSON.parse(body);
+          resolve({ city: d.city || '', country: d.country || '', latitude: d.lat ?? null, longitude: d.lon ?? null });
+        } catch { resolve({ city: '', country: '', latitude: null, longitude: null }); }
+      });
+    });
+    req.on('error', () => resolve({ city: '', country: '', latitude: null, longitude: null }));
+    req.on('timeout', () => { req.destroy(); resolve({ city: '', country: '', latitude: null, longitude: null }); });
+  });
+}
+
+/**
+ * Activate a license: gathers fingerprint + geolocation, POSTs to Django backend.
+ */
+ipcMain.handle('activate-license', async (_event, code) => {
+  const { mac_address, ip_address } = getMachineFingerprint();
+  const geo = await getGeolocation(ip_address);
+
+  const payload = JSON.stringify({ code, mac_address, ip_address, ...geo });
+
+  return new Promise((resolve) => {
+    const opts = {
+      hostname: 'localhost', port: 8000, path: '/api/licenses/activate/',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      timeout: 10000,
+    };
+    const req = http.request(opts, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); } catch { resolve({ error: 'Invalid response from server' }); }
+      });
+    });
+    req.on('error', () => resolve({ error: 'Connection refused' }));
+    req.on('timeout', () => { req.destroy(); resolve({ error: 'Request timed out' }); });
+    req.write(payload);
+    req.end();
+  });
 });
 
 // App version IPC
@@ -1136,15 +965,8 @@ function startBackend() {
   }
 }
 
-function createWindow(licenseStatus) {
-  // Start the backend ONLY if license is valid
-  // DEVELOPMENT OVERRIDE: Allow backend to start in dev mode even without license
-  if (isDev || (licenseStatus && licenseStatus.success)) {
-    startBackend();
-  } else {
-    console.log("Backend not started: License invalid");
-    logStream.write(`[${new Date().toISOString()}] Backend not started: License invalid or not found\n`);
-  }
+function createWindow() {
+  startBackend();
 
   // Create the browser window.
   const win = new BrowserWindow({
@@ -1252,10 +1074,24 @@ app.whenReady().then(async () => {
     app.commandLine.appendSwitch('high-dpi-support', '1');
   }
 
-  // Check license before anything else
-  const licenseStatus = await validateLicense();
+  // Check for stored license via safeStorage
+  const encPath = path.join(app.getPath('userData'), 'license.enc');
+  let storedLicense = null;
+  if (fs.existsSync(encPath)) {
+    try {
+      storedLicense = safeStorage.isEncryptionAvailable()
+        ? safeStorage.decryptString(fs.readFileSync(encPath))
+        : fs.readFileSync(encPath, 'utf8');
+    } catch (e) {
+      console.error('Failed to read stored license:', e.message);
+    }
+  }
 
-  createWindow(licenseStatus);
+  if (storedLicense) {
+    createWindow();
+  } else {
+    openLicenseWindow();
+  }
 
   // Check for updates after window is ready (not in dev mode)
   if (!isDev) {
@@ -1305,11 +1141,13 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('activate', async () => {
-  // On macOS it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    const licenseStatus = await validateLicense();
-    createWindow(licenseStatus);
+    const encPath = path.join(app.getPath('userData'), 'license.enc');
+    if (fs.existsSync(encPath)) {
+      createWindow();
+    } else {
+      openLicenseWindow();
+    }
   }
 });

@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/', include('apps.inventory.urls')),
     path('api/shop/', include('apps.shop.urls')),
     path('api/system/', include('apps.core.urls')),  # Sync management endpoints
+    path('api/', include('apps.licensing.urls')),
 
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

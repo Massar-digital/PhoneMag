@@ -12,11 +12,6 @@ contextBridge.exposeInMainWorld(
       sendCPCL: (cpclData, printerName) => ipcRenderer.invoke('printer:send-cpcl', { cpclData, printerName }),
       getPrinters: () => ipcRenderer.invoke('printer:get-list')
     },
-    license: {
-      activate: (key) => ipcRenderer.invoke('license:activate', key),
-      check: () => ipcRenderer.invoke('license:check'),
-      getMachineId: () => ipcRenderer.invoke('license:get-machine-id')
-    },
     warranty: {
       importPDF: () => ipcRenderer.invoke('warranty:import-pdf'),
       resetToDefault: () => ipcRenderer.invoke('warranty:reset-to-default'),
@@ -73,6 +68,15 @@ contextBridge.exposeInMainWorld(
 window.print = () => {
   ipcRenderer.invoke('print');
 };
+
+contextBridge.exposeInMainWorld(
+  'electronAPI',
+  {
+    getMachineFingerprint: () => ipcRenderer.invoke('get-machine-fingerprint'),
+    activateLicense: (code) => ipcRenderer.invoke('activate-license', code),
+    notifyLicenseActivated: (code) => ipcRenderer.invoke('license-activated', code),
+  }
+);
 
 window.addEventListener('DOMContentLoaded', () => {
   const replaceText = (selector, text) => {
