@@ -49,9 +49,11 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('rememberMe', JSON.stringify(rememberMe));
 
     // Save current boot time to tie session to this PC uptime
-    window.electron.versions.getBootTime().then(bootTime => {
-      localStorage.setItem('last_boot_time', bootTime.toString());
-    });
+    if (window.electron?.versions?.getBootTime) {
+      window.electron.versions.getBootTime().then(bootTime => {
+        localStorage.setItem('last_boot_time', bootTime.toString());
+      }).catch(() => {});
+    }
   };
 
   useEffect(() => {
@@ -61,7 +63,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const rememberMeStr = localStorage.getItem('rememberMe');
         const rememberMe = rememberMeStr ? JSON.parse(rememberMeStr) : false;
-        const currentBootTime = await window.electron.versions.getBootTime();
+        const currentBootTime = window.electron?.versions?.getBootTime ? await window.electron.versions.getBootTime() : Math.round(Date.now() / 1000);
         const storedBootTime = localStorage.getItem('last_boot_time');
         const parsedStoredTime = parseInt(storedBootTime);
 
@@ -93,7 +95,21 @@ export const AuthProvider = ({ children }) => {
           // Validate session by silently refreshing the token first.
           // This avoids triggering the interceptor's noisy 401 flow on getUser.
           try {
-            const refreshResponse = await authAPI.refresh();
+            let retries = 5;
+            let refreshResponse = null;
+            while (retries > 0) {
+              try {
+                refreshResponse = await authAPI.refresh();
+                break;
+              } catch (err) {
+                if (!err.response && retries > 1) {
+                  retries -= 1;
+                  await new Promise(r => setTimeout(r, 2000));
+                  continue;
+                }
+                throw err;
+              }
+            }
             const newToken = refreshResponse.data.access;
             if (newToken) {
               setAuthTokens(newToken, null);

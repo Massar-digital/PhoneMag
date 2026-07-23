@@ -255,14 +255,16 @@ export const SalesTable = ({
                     >
                       <PencilSquareIcon className="w-4 h-4" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onRefund(sale.id)}
-                      className="!p-2 text-danger-600 hover:bg-danger-50"
-                    >
-                      <ArrowPathIcon className="w-4 h-4" />
-                    </Button>
+                    {!isFullyReturned && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onRefund(sale.id)}
+                        className="!p-2 text-danger-600 hover:bg-danger-50"
+                      >
+                        <ArrowPathIcon className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>

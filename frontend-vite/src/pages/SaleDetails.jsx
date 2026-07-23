@@ -165,6 +165,8 @@ const SaleDetails = () => {
     );
   }
 
+  const isRefunded = sale.returns?.length > 0;
+
   const items = sale.items && sale.items.length > 0 
     ? sale.items 
     : (sale.phone_details || sale.product_name_at_sale) ? [{
@@ -205,7 +207,7 @@ const SaleDetails = () => {
                 <PencilSquareIcon className="w-4 h-4 mr-2" />
                 Modifier
               </Button>
-              <Button variant="outline" onClick={handlePrintInvoice} size="sm">
+              <Button variant="outline" onClick={handlePrintInvoice} size="sm" disabled={isRefunded} title={isRefunded ? "Vente déjà remboursée" : ""}>
                 <PrinterIcon className="w-4 h-4 mr-2" />
                 Facture
               </Button>
@@ -213,11 +215,13 @@ const SaleDetails = () => {
                 className="bg-blue-600 hover:bg-blue-700 text-white border-transparent" 
                 onClick={handlePrintWarranty} 
                 size="sm"
+                disabled={isRefunded}
+                title={isRefunded ? "Vente déjà remboursée" : ""}
               >
                 <ShieldCheckIcon className="w-4 h-4 mr-2" />
                 Garantie
               </Button>
-              <Button variant="danger" onClick={() => setShowRefundModal(true)} size="sm">
+              <Button variant="danger" onClick={() => setShowRefundModal(true)} size="sm" disabled={isRefunded} title={isRefunded ? "Vente déjà remboursée" : ""}>
                 <ArrowPathIcon className="w-4 h-4 mr-2" />
                 Rembourser
               </Button>
@@ -366,6 +370,8 @@ const SaleDetails = () => {
                 size="sm"
                 className="w-full bg-slate-900 hover:bg-black text-white h-10 sm:h-11"
                 icon={<svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>}
+                disabled={isRefunded}
+                title={isRefunded ? "Vente déjà remboursée" : ""}
               >
                 Imprimer Facture
               </Button>
@@ -374,6 +380,8 @@ const SaleDetails = () => {
                 size="sm"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11"
                 icon={<svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
+                disabled={isRefunded}
+                title={isRefunded ? "Vente déjà remboursée" : ""}
               >
                 Bon de Garantie
               </Button>
@@ -382,6 +390,8 @@ const SaleDetails = () => {
                 size="sm"
                 onClick={() => setShowRefundModal(true)}
                 className="w-full border-red-500 text-red-600 hover:bg-red-50 h-10 sm:h-11"
+                disabled={isRefunded}
+                title={isRefunded ? "Vente déjà remboursée" : ""}
               >
                 Rembourser
               </Button>

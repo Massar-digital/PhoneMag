@@ -187,8 +187,9 @@ const SalesList = () => {
     setBulkRefundLoading(true);
 
     try {
-      const salesToRefund = sales.filter(sale => selectedSales.includes(sale.id));
-      console.log('Sales to refund:', salesToRefund);
+      const salesToRefund = sales.filter(sale => selectedSales.includes(sale.id) && (!sale.returns || sale.returns.length === 0));
+      const skippedCount = selectedSales.length - salesToRefund.length;
+      console.log('Sales to refund:', salesToRefund, `(${skippedCount} skipped - already refunded)`);
       
       // Process refunds sequentially instead of in parallel to avoid "Database is locked" error with SQLite
       let completedCount = 0;
@@ -239,7 +240,8 @@ const SalesList = () => {
       loadSales(pagination.currentPage);
       
       if (window.showToast) {
-        window.showToast(`${completedCount} vente(s) remboursée(s) avec succès.`, 'success');
+        const msg = `${completedCount} vente(s) remboursée(s) avec succès.${skippedCount > 0 ? ` ${skippedCount} vente(s) déjà remboursée(s) ignorée(s).` : ''}`;
+        window.showToast(msg, 'success');
       }
     } catch (error) {
       console.error('Error refunding sales:', error);
