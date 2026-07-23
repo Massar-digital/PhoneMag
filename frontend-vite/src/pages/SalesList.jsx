@@ -73,6 +73,9 @@ const SalesList = () => {
     end_date: todayStr,
     search: '',
     ordering: '-sale_date',
+    payment_method: '',
+    payment_status: '',
+    return_status: '',
   });
 
   // Filter options
@@ -84,6 +87,21 @@ const SalesList = () => {
     { value: 'Check', label: 'Chèque' },
     { value: 'Mobile Wallet', label: 'Paiement Mobile' },
     { value: 'Other', label: 'Autre' },
+  ];
+
+  const paymentStatusOptions = [
+    { value: '', label: 'Tous les statuts' },
+    { value: 'PAID', label: 'Payé' },
+    { value: 'PARTIAL', label: 'Partiel' },
+    { value: 'UNPAID', label: 'Impayé' },
+  ];
+
+  const returnStatusOptions = [
+    { value: '', label: 'Toutes les ventes' },
+    { value: 'with_returns', label: 'Avec remboursements' },
+    { value: 'without_returns', label: 'Sans remboursement' },
+    { value: 'fully_returned', label: 'Entièrement remboursé' },
+    { value: 'partially_returned', label: 'Partiellement remboursé' },
   ];
 
   const orderingOptions = [
@@ -155,7 +173,10 @@ const SalesList = () => {
       search: '',
       start_date: todayStr,
       end_date: todayStr,
-      ordering: '-sale_date'
+      ordering: '-sale_date',
+      payment_method: '',
+      payment_status: '',
+      return_status: '',
     });
     setSelectedSales([]);
   };
@@ -332,18 +353,47 @@ const SalesList = () => {
   // Export handlers
   const handleExportCSV = () => {
     // Create CSV content
-    const headers = ['Numéro de facture', 'Date et Heure', 'Nom du client', 'Produit', 'Quantité', 'Prix total', 'Mode de paiement'];
+    const headers = [
+      'Numéro de facture', 'Date', 'Heure', 'Client', 'Téléphone client', 
+      'Produit', 'Quantité', 'Prix unitaire', 'Prix total', 'Remise', 
+      'Montant payé', 'Statut paiement', 'Mode de paiement',
+      'Garantie', 'Vendeur', 'Marge bénéficiaire',
+      'Statut remboursement', 'N° retour', 'Montant remboursé', 'Motif retour',
+      'Notes'
+    ];
     const csvContent = [
       headers.join(','),
-      ...sales.map(sale => [
-        sale.invoice_number || '',
-        new Date(sale.sale_date).toLocaleString(),
-        `"${sale.customer_name}"`,
+      ...sales.map(sale => {
+        const date = new Date(sale.sale_date);
+        const isReturned = sale.net_total === 0;
+        const isPartialReturn = sale.net_total > 0 && sale.net_total < sale.total_price;
+        const returnStatus = isReturned ? 'Entièrement remboursé' : isPartialReturn ? 'Partiellement remboursé' : 'Aucun';
+        const latestReturn = sale.latest_return;
+        
+        return [
+          sale.invoice_number || '',
+          date.toLocaleDateString('fr-FR'),
+          date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          `"${sale.customer_name || ''}"`,
+          sale.customer_phone || '',
           `"${sale.phone_details ? `${sale.phone_details.brand} ${sale.phone_details.model}` : (sale.product_name_at_sale || sale.items?.[0]?.product_name_at_sale || 'Produit inconnu')}"`,
-        sale.quantity,
-        sale.total_price,
-        sale.payment_method,
-      ].join(','))
+          sale.quantity || (sale.items?.reduce((sum, item) => sum + item.quantity, 0) || 0),
+          sale.items?.[0]?.unit_price || '',
+          parseFloat(sale.total_price).toFixed(2),
+          parseFloat(sale.discount_applied || 0).toFixed(2),
+          sale.amount_paid ? parseFloat(sale.amount_paid).toFixed(2) : '',
+          sale.payment_status || '',
+          sale.payment_method || '',
+          sale.warranty_duration || '',
+          `"${sale.user_name || ''}"`,
+          sale.profit_margin ? parseFloat(sale.profit_margin).toFixed(2) : '',
+          returnStatus,
+          latestReturn?.return_number || '',
+          latestReturn ? parseFloat(latestReturn.total_refunded).toFixed(2) : '',
+          `"${latestReturn?.reason || ''}"`,
+          `"${sale.notes || ''}"`,
+        ].join(',');
+      })
     ].join('\n');
 
     // Download CSV
@@ -398,7 +448,7 @@ const SalesList = () => {
                 leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
               />
             </div>
-            {(filters.search || filters.start_date || filters.end_date) && (
+            {(filters.search || filters.start_date !== todayStr || filters.end_date !== todayStr || filters.payment_method || filters.payment_status || filters.return_status) && (
               <Button 
                 variant="outline" 
                 onClick={handleClearFilters}
@@ -411,7 +461,7 @@ const SalesList = () => {
           </div>
 
           {/* Filter Row */}
-          <div className="grid-responsive md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid-responsive md:grid-cols-2 lg:grid-cols-4">
             <div className="relative">
               <Input
                 label="Du"
@@ -437,6 +487,33 @@ const SalesList = () => {
                 className="!mb-0"
               />
             </div>
+
+            <Select
+              label="Mode de paiement"
+              value={filters.payment_method || ''}
+              onChange={(value) => handleFilterChange('payment_method', value)}
+              options={paymentMethodOptions}
+              placeholder="Filtrer par paiement"
+              className="!mb-0"
+            />
+
+            <Select
+              label="Statut de paiement"
+              value={filters.payment_status || ''}
+              onChange={(value) => handleFilterChange('payment_status', value)}
+              options={paymentStatusOptions}
+              placeholder="Filtrer par statut"
+              className="!mb-0"
+            />
+
+            <Select
+              label="Statut de remboursement"
+              value={filters.return_status || ''}
+              onChange={(value) => handleFilterChange('return_status', value)}
+              options={returnStatusOptions}
+              placeholder="Filtrer par remboursement"
+              className="!mb-0"
+            />
 
             <Select
               label="Tri"

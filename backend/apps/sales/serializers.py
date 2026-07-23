@@ -340,6 +340,12 @@ class SaleSerializer(serializers.ModelSerializer):
     returns = ProductReturnSerializer(many=True, read_only=True, source='product_returns')
     # Add net amount (total_price - refunded)
     net_total = serializers.SerializerMethodField()
+    # Add user full name
+    user_name = serializers.SerializerMethodField()
+    # Add total refunded amount
+    total_refunded = serializers.SerializerMethodField()
+    # Add latest return info
+    latest_return = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
@@ -350,7 +356,6 @@ class SaleSerializer(serializers.ModelSerializer):
         """Calculate amount remaining after refunds"""
         try:
             total_refunded = Decimal('0.00')
-            # product_returns is the related name from ProductReturn model
             if hasattr(obj, 'product_returns'):
                 for r in obj.product_returns.all():
                     for item in r.items.all():
@@ -360,6 +365,45 @@ class SaleSerializer(serializers.ModelSerializer):
             return float(total_price - total_refunded)
         except Exception:
             return 0.0
+
+    def get_user_name(self, obj):
+        """Get the salesperson's full name"""
+        if obj.user:
+            if obj.user.first_name or obj.user.last_name:
+                return f"{obj.user.first_name} {obj.user.last_name}".strip()
+            return obj.user.username
+        return None
+
+    def get_total_refunded(self, obj):
+        """Calculate total amount refunded for this sale"""
+        try:
+            total = Decimal('0.00')
+            if hasattr(obj, 'product_returns'):
+                for r in obj.product_returns.all():
+                    for item in r.items.all():
+                        total += (item.refund_amount or Decimal('0.00'))
+            return float(total)
+        except Exception:
+            return 0.0
+
+    def get_latest_return(self, obj):
+        """Get details of the most recent return for this sale"""
+        try:
+            latest = obj.product_returns.order_by('-return_date').first()
+            if latest:
+                return {
+                    'return_number': latest.return_number,
+                    'return_date': latest.return_date,
+                    'reason': latest.reason,
+                    'processed_by_name': latest.processed_by.username if latest.processed_by else None,
+                    'items_count': latest.items.count(),
+                    'total_refunded': float(sum(
+                        (item.refund_amount or Decimal('0.00')) for item in latest.items.all()
+                    ))
+                }
+            return None
+        except Exception:
+            return None
 
     def get_phone_details(self, obj):
         """Get phone details for single item or first item of multiple"""

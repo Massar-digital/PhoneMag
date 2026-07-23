@@ -23,7 +23,8 @@ import {
   PhoneIcon,
   CalendarIcon,
   BanknotesIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  CubeIcon
 } from '@heroicons/react/24/outline';
 
 const paymentMethodLabels = {
@@ -303,6 +304,20 @@ const SaleDetails = () => {
                     {sale.warranty_duration || '12 mois'}
                   </div>
                 </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vendeur</span>
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-700">
+                    <UserIcon className="w-4 h-4 text-slate-400" />
+                    {sale.user_name || 'N/A'}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client</span>
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-700">
+                    <PhoneIcon className="w-4 h-4 text-slate-400" />
+                    {sale.customer_phone || 'N/A'}
+                  </div>
+                </div>
               </div>
 
               {sale.payment_status === 'PARTIAL' && (
@@ -347,17 +362,82 @@ const SaleDetails = () => {
 
           {sale.returns && sale.returns.length > 0 && (
             <Card className="p-[var(--spacing-md)] border-red-100 bg-red-50/30">
-              <h3 className="text-lg font-semibold text-red-900 mb-4">Retours</h3>
+              <div className="flex items-center gap-2 mb-4">
+                <ArrowPathIcon className="w-5 h-5 text-red-600" />
+                <h3 className="text-lg font-semibold text-red-900">Remboursements</h3>
+                <span className="text-xs font-bold text-red-500 ml-auto">
+                  {sale.returns.length} retour(s)
+                </span>
+              </div>
               <div className="space-y-4">
-                {sale.returns.map((ret, index) => (
-                  <div key={index} className="text-sm border-b border-red-100 pb-2 last:border-0">
-                    <p className="font-bold text-red-800">{ret.phone_details?.brand} {ret.phone_details?.model}</p>
-                    <div className="flex justify-between mt-1 text-xs">
-                      <span>{ret.quantity} unité(s)</span>
-                      <span className="text-red-600 font-bold">-{parseFloat(ret.refund_amount).toLocaleString()} DA</span>
+                {sale.returns.map((ret, index) => {
+                  const totalRefunded = ret.items?.reduce((sum, item) => sum + parseFloat(item.refund_amount || 0), 0) || 0;
+                  return (
+                    <div key={index} className="bg-white/60 rounded-xl p-3 border border-red-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-mono text-xs font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                          {ret.return_number}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(ret.return_date).toLocaleDateString('fr-FR', {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      {ret.reason && (
+                        <p className="text-xs text-red-700 mb-2 italic">
+                          "{ret.reason}"
+                        </p>
+                      )}
+                      {ret.processed_by_name && (
+                        <p className="text-[10px] text-slate-400 mb-2">
+                          Traité par: <span className="font-semibold text-slate-500">{ret.processed_by_name}</span>
+                        </p>
+                      )}
+                      <div className="space-y-1.5">
+                        {ret.items?.map((item, iidx) => (
+                          <div key={iidx} className="flex justify-between items-center text-xs border-b border-red-50 pb-1 last:border-0">
+                            <div className="flex items-center gap-2">
+                              <CubeIcon className="w-3 h-3 text-red-400" />
+                              <span className="text-slate-700">
+                                {item.product_details?.brand} {item.product_details?.model}
+                                {item.quantity > 1 && ` (×${item.quantity})`}
+                              </span>
+                            </div>
+                            <span className="font-bold text-red-600">
+                              -{parseFloat(item.refund_amount || 0).toLocaleString()} DA
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-red-100">
+                        <span className="text-xs font-bold text-red-800">Total remboursé</span>
+                        <span className="text-sm font-black text-red-600">
+                          -{totalRefunded.toLocaleString()} DA
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+              <div className="mt-4 pt-3 border-t border-red-200">
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-slate-600">Total de la vente</span>
+                  <span className="font-bold">{parseFloat(sale.total_price).toLocaleString()} DA</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="font-semibold text-slate-600">Total remboursé</span>
+                  <span className="font-bold text-red-600">
+                    -{parseFloat(sale.total_refunded || 0).toLocaleString()} DA
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm mt-1 pt-1 border-t border-slate-200">
+                  <span className="font-semibold text-slate-800">Net</span>
+                  <span className="font-bold text-success-600">
+                    {parseFloat(sale.net_total || 0).toLocaleString()} DA
+                  </span>
+                </div>
               </div>
             </Card>
           )}
