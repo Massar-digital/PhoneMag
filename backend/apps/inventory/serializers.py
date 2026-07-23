@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import Sum
 from .models import InventoryItem, StockHistory, Supplier
 from apps.core.validators import (
     validate_positive_integer, 
@@ -13,6 +14,11 @@ from apps.phones.models import Phone
 
 class SupplierSerializer(serializers.ModelSerializer):
     """Serializer for suppliers with input validation"""
+    total_phones = serializers.SerializerMethodField(read_only=True)
+    total_spent = serializers.SerializerMethodField(read_only=True)
+    last_purchase_date = serializers.SerializerMethodField(read_only=True)
+    purchase_history = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Supplier
         fields = '__all__'
@@ -32,6 +38,34 @@ class SupplierSerializer(serializers.ModelSerializer):
         if value:
             return validate_email_format(value)
         return value
+
+    def get_total_phones(self, obj):
+        return obj.phones.count()
+
+    def get_total_spent(self, obj):
+        total = obj.phones.aggregate(total=Sum('purchase_price'))['total']
+        return float(total) if total else 0.0
+
+    def get_last_purchase_date(self, obj):
+        last_phone = obj.phones.order_by('-created_at').first()
+        return last_phone.created_at.isoformat() if last_phone else None
+
+    def get_purchase_history(self, obj):
+        phones_qs = obj.phones.all().order_by('-created_at')
+        return [
+            {
+                'id': p.id,
+                'product_type': p.product_type,
+                'brand': p.brand,
+                'model': p.model,
+                'storage': p.storage,
+                'color': p.color,
+                'price': str(p.price),
+                'purchase_price': str(p.purchase_price),
+                'created_at': p.created_at.isoformat(),
+            }
+            for p in phones_qs
+        ]
 
 
 class InventoryItemSerializer(serializers.ModelSerializer):

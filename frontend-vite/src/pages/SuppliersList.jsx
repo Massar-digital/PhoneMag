@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
+import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
 import { suppliersAPI } from '../services/api';
 
 import { Button } from '../components/common/Button';
@@ -57,7 +58,11 @@ export const SuppliersList = () => {
     {
       key: 'name',
       label: 'Nom du fournisseur',
-      render: (value) => <span className="font-medium text-gray-900">{value}</span>,
+      render: (value, supplier) => (
+        <Link to={`/suppliers/${supplier.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+          {value}
+        </Link>
+      ),
     },
     {
       key: 'contact_person',
@@ -80,6 +85,13 @@ export const SuppliersList = () => {
       label: 'Actions',
       render: (value, supplier) => (
         <div className="flex space-x-2">
+          <Link
+            to={`/suppliers/${supplier.id}`}
+            className="p-1 text-green-600 hover:bg-green-50 rounded"
+            title="Voir les détails"
+          >
+            <EyeIcon className="w-5 h-5" />
+          </Link>
           <button
             onClick={() => setEditingSupplier(supplier)}
             className="p-1 text-blue-600 hover:bg-blue-50 rounded"

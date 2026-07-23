@@ -28,6 +28,7 @@ import StockHistory from './pages/StockHistory';
 import { CustomersList } from './pages/CustomersList';
 import { CustomerDetails } from './pages/CustomerDetails';
 import { SuppliersList } from './pages/SuppliersList';
+import { SupplierDetails } from './pages/SupplierDetails';
 import Reports from './pages/Reports';
 import SalesReport from './pages/SalesReport';
 import InventoryReport from './pages/InventoryReport';
@@ -343,6 +344,16 @@ const AppContent = () => {
             <AppLayout>
               <PageTransition>
                 <SuppliersList />
+              </PageTransition>
+            </AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/suppliers/:id" element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PageTransition>
+                <SupplierDetails />
               </PageTransition>
             </AppLayout>
           </ProtectedRoute>
